@@ -27,9 +27,9 @@ class Scripted:
         return dict(content="", tool_calls=[dict(name=n, arguments=a) for n, a in t])
 
 
-MISSION = dict(name="Seletar pair", mode="mission", flight_type="props_on",
-               aircraft=[dict(sysid=113, plan="missions/seletar/mission_drones/drone-2.plan", link="radio"),
-                         dict(sysid=115, plan="missions/seletar/mission_drones/drone-1.plan", link="radio")])
+MISSION = dict(name="Sample pair", mode="mission", flight_type="props_on",
+               aircraft=[dict(sysid=113, plan="missions/sample/mission_drones/drone-2.plan", link="radio"),
+                         dict(sysid=115, plan="missions/sample/mission_drones/drone-1.plan", link="radio")])
 BENCH = dict(name="Pair bench arm", sysids=[113, 115], flight_type="bench", link="radio", stage="arm", wait_s=5)
 
 
@@ -183,12 +183,12 @@ def test_the_model_is_told_whether_it_holds_a_delegation(app):
     tok = authorise(app, "fleet", MISSION)
     agent.ask("fly it", llm=Spy(), phase="C", extra_tools=actions.tools_for(app, tok), act_ok=True, delegation=app.delegations[tok])
     agent.ask("fly it", llm=Spy(), phase="C", extra_tools=actions.tools_for(app, None), act_ok=False)
-    assert "Delegation: VALID" in " ".join(m["content"] for m in seen[0]) and "Seletar pair" in " ".join(m["content"] for m in seen[0])
+    assert "Delegation: VALID" in " ".join(m["content"] for m in seen[0]) and "Sample pair" in " ".join(m["content"] for m in seen[0])
     assert "Delegation: NONE" in " ".join(m["content"] for m in seen[1])
 
 
 def test_an_upload_run_has_no_gates_for_the_operator_or_the_assistant(app):
-    up = dict(MISSION, name="Seletar upload", mode="upload", flight_type="bench")
+    up = dict(MISSION, name="Sample upload", mode="upload", flight_type="bench")
     tok = authorise(app, "fleet", up)
     say(app, tok, [[("execute_authorised_run", {})], "Started."])
     assert app.fleet.p["mode"] == "upload"

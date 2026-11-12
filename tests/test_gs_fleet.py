@@ -13,14 +13,14 @@ from artex.console import gs_core as core  # noqa: E402
 from artex.console import gs_fleet as fleet  # noqa: E402
 from artex.console import gs_server as srv  # noqa: E402
 
-P1 = "missions/seletar/mission_drones/drone-1.plan"
-P2 = "missions/seletar/mission_drones/drone-2.plan"
+P1 = "missions/sample/mission_drones/drone-1.plan"
+P2 = "missions/sample/mission_drones/drone-2.plan"
 OTHER = next((str(p.relative_to(core.ROOT)) for p in sorted((core.ROOT / "missions").glob("**/drone-1.plan"))
-              if "seletar" not in str(p)), None)
+              if "sample" not in str(p)), None)
 
 
 def prof(**kw):
-    base = dict(name="Seletar pair", mode="mission", flight_type="props_on",
+    base = dict(name="Sample pair", mode="mission", flight_type="props_on",
                 aircraft=[dict(sysid=113, plan=P2, link="radio"), dict(sysid=115, plan=P1, link="radio")])
     base.update(kw)
     return fleet.normalise(base)
@@ -31,7 +31,7 @@ GO = {113: dict(preflight_go=True, preflight_age_s=30.0), 115: dict(preflight_go
 
 # ---- profiles and validation ------------------------------------------------------------
 
-def test_a_seletar_pair_is_valid_and_its_agents_are_resident_prepares():
+def test_a_sample_pair_is_valid_and_its_agents_are_resident_prepares():
     p = prof()
     assert fleet.validate(p) == []
     argv = fleet.agent_argv(p, p["aircraft"][0], "gsX")

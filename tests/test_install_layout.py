@@ -7,11 +7,11 @@ def test_first_run_copies_the_starter_set_and_never_overwrites(tmp_path, monkeyp
     data = tmp_path / "artex-data"
     monkeypatch.setattr(layout, "DATA", data)
     layout.ensure_data()
-    assert (data / "ops" / "seletar-west-camp.kml").exists() and (data / "missions" / "seletar" / "mission_drones" / "drone-1.plan").exists()
+    assert (data / "ops" / "sample-camp.kml").exists() and (data / "missions" / "sample" / "mission_drones" / "drone-1.plan").exists()
     assert (data / "site-examples" / "aircraft.example.yaml").exists() and (data / "config.example.json").exists()
-    (data / "ops" / "seletar-west-camp.kml").write_text("mine")
+    (data / "ops" / "sample-camp.kml").write_text("mine")
     layout.ensure_data()
-    assert (data / "ops" / "seletar-west-camp.kml").read_text() == "mine"
+    assert (data / "ops" / "sample-camp.kml").read_text() == "mine"
 
 
 def test_a_checkout_uses_itself_as_the_data_root():

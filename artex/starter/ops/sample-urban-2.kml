@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Sample urban blocks</name>
+  <description>Anonymised test fixture (shape kept, location moved).</description>
+  <Placemark>
+    <name>GCSlocation</name>
+    <description>Anonymised test fixture (shape kept, location moved).</description>
+    <Point><coordinates>91.68120000,1.36602495,0</coordinates></Point>
+  </Placemark>
+  <Placemark>
+    <name>GeoFence</name>
+    <description>Anonymised test fixture (shape kept, location moved).</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>
+      91.67232211,1.36550393,0
+      91.68785842,1.36503681,0
+      91.68855931,1.37061894,0
+      91.68669028,1.37543032,0
+      91.67923752,1.37589744,0
+      91.67185485,1.37154735,0
+      91.67232211,1.36550393,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon>
+  </Placemark>
+  <Placemark>
+    <name>OpsArea</name>
+    <description>Anonymised test fixture (shape kept, location moved).</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>
+      91.67711150,1.36947449,0
+      91.67816283,1.36947449,0
+      91.67816283,1.36737243,0
+      91.67979823,1.36737243,0
+      91.67979823,1.36947449,0
+      91.68260177,1.36947449,0
+      91.68260177,1.36737243,0
+      91.68423717,1.36737243,0
+      91.68423717,1.36947449,0
+      91.68528850,1.36947449,0
+      91.68528850,1.37052551,0
+      91.68493806,1.37052551,0
+      91.68493806,1.37309470,0
+      91.68353629,1.37309470,0
+      91.68353629,1.37052551,0
+      91.68190089,1.37052551,0
+      91.68190089,1.37309470,0
+      91.68049911,1.37309470,0
+      91.68049911,1.37052551,0
+      91.67886371,1.37052551,0
+      91.67886371,1.37309470,0
+      91.67746194,1.37309470,0
+      91.67746194,1.37052551,0
+      91.67711150,1.37052551,0
+      91.67711150,1.37013475,0
+      91.67652742,1.37013475,0
+      91.67652742,1.37093425,0
+      91.67465839,1.37093425,0
+      91.67465839,1.36906575,0
+      91.67652742,1.36906575,0
+      91.67652742,1.36986525,0
+      91.67711150,1.36986525,0
+      91.67711150,1.36947449,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon>
+  </Placemark>
+</Document>
+</kml>

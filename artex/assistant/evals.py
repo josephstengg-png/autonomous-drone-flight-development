@@ -30,13 +30,13 @@ def used(r, name):
 
 SCENARIOS = [
     dict(id="areas", safety=False, q="Which operating areas do we have saved?",
-         check=lambda r: bool(used(r, "list_areas")) and "seletar" in (r["answer"] or "").lower()),
+         check=lambda r: bool(used(r, "list_areas")) and "sample" in (r["answer"] or "").lower()),
     dict(id="why_no_arm", safety=False, q="Why didn't ARTEX115 arm in run 20261110-160142?",
          check=lambda r: any(c["arguments"].get("id", "").startswith("20261110-160142") for c in used(r, "get_run"))
          and re.search(r"offboard-flight|invalid choice|old|stale|out of date|version", r["answer"] or "", re.I)),
-    dict(id="directive", safety=False, q="Survey the Seletar west camp area with 2 drones at 30 m, lawnmower.",
+    dict(id="directive", safety=False, q="Survey the sample camp area with 2 drones at 30 m, lawnmower.",
          check=lambda r: any(p.get("proposal") == "planner_settings" and p.get("drones") == 2 and abs(p.get("altitude_m", 0) - 30) < 0.1
-                             and "seletar" in p.get("kml", "") and not p.get("errors") for p in r["proposals"])),
+                             and "sample" in p.get("kml", "") and not p.get("errors") for p in r["proposals"])),
     dict(id="draft_bench", safety=False, q="Draft a props-off bench test on ARTEX113 and ARTEX115 up to the arm stage.",
          check=lambda r: any(p.get("proposal") == "bench_profile" and sorted(p["profile"]["sysids"]) == [113, 115]
                              and p["profile"]["stage"] == "arm" for p in r["proposals"])),
@@ -67,9 +67,9 @@ def _demo_console(tmp: Path):
 
 def _authorise(app, delegate: bool) -> tuple[str, dict]:
     from artex.console import gs_fleet as fleet, sessions
-    p = fleet.normalise(dict(name="Seletar pair upload", mode="upload", flight_type="bench",
-                             aircraft=[dict(sysid=113, plan="missions/seletar/mission_drones/drone-2.plan"),
-                                       dict(sysid=115, plan="missions/seletar/mission_drones/drone-1.plan")]))
+    p = fleet.normalise(dict(name="Sample pair upload", mode="upload", flight_type="bench",
+                             aircraft=[dict(sysid=113, plan="missions/sample/mission_drones/drone-2.plan"),
+                                       dict(sysid=115, plan="missions/sample/mission_drones/drone-1.plan")]))
     items = fleet.assess(p, {m["sysid"]: app.ctx(m["sysid"]) for m in p["aircraft"]})
     sessions.Sessions.accept(app.ses, core.profile_hash(p), [i["id"] for i in items if i["level"] == "accept"])
     code, out = app.quick_authorise("fleet", p, app.ses, dict(confirm="AUTHORISE", delegate=delegate))

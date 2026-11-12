@@ -17,7 +17,7 @@ ROOT = Path(__file__).parents[1]
 @pytest.mark.parametrize("scan_type", ["lawnmower", "voronoi"])
 @pytest.mark.parametrize("number_of_drones", [1, 2, 3, 4])
 def test_multi_agent_plan_stays_inside_fence(scan_type, number_of_drones):
-    mission = parse_kml(ROOT / "ops" / "SAFTI city.kml")
+    mission = parse_kml(ROOT / "ops" / "sample-urban.kml")
     config = replace(load_config(ROOT / "config.example.json"), scan_type=scan_type, number_of_drones=number_of_drones)
     result = MultiAgentPlanner().run(mission, config)
     assert result.guardrail_passed, result.warnings
@@ -25,7 +25,7 @@ def test_multi_agent_plan_stays_inside_fence(scan_type, number_of_drones):
 
 
 def test_voronoi_mode_creates_one_partition_per_drone():
-    mission = parse_kml(ROOT / "ops" / "SAFTI city.kml")
+    mission = parse_kml(ROOT / "ops" / "sample-urban.kml")
     config = replace(load_config(ROOT / "config.example.json"), scan_type="voronoi")
     result = MultiAgentPlanner().run(mission, config)
     assert result.guardrail_passed, result.warnings
@@ -52,7 +52,7 @@ def test_lawnmower_scan_partitions_into_contiguous_non_overlapping_strips():
 def test_lawnmower_drones_each_cover_only_a_fraction_of_the_ops_area():
     """Regression test: drones used to interleave every Nth point of one global sweep instead of
     getting a spatially contiguous strip, so every drone's bounding box spanned the whole area."""
-    mission = parse_kml(ROOT / "ops" / "SAFTI city.kml")
+    mission = parse_kml(ROOT / "ops" / "sample-urban.kml")
     config = load_config(ROOT / "config.example.json")
     result = MultiAgentPlanner().run(mission, config)
 
@@ -154,7 +154,7 @@ def test_voronoi_seeds_are_distinct_on_an_awkward_shape():
 
 
 def test_voronoi_gives_each_drone_a_different_cell():
-    mission = parse_kml(ROOT / "ops" / "SAFTI city.kml")
+    mission = parse_kml(ROOT / "ops" / "sample-urban.kml")
     config = replace(load_config(ROOT / "config.example.json"), scan_type="voronoi", number_of_drones=4)
 
     result = MultiAgentPlanner().run(mission, config)

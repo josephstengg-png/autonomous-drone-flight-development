@@ -184,7 +184,7 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
      <button class="btn" id="ar-undo" type="button">Undo corner</button>
      <button class="btn danger" id="ar-clear" type="button">Clear shape</button>
     </div>
-    <div class="row"><label class="f">Start from a saved area<select id="ar-load"><option value="">(blank)</option></select></label><label class="f">Area name<input id="ar-name" maxlength="40" placeholder="e.g. seletar-north"></label></div>
+    <div class="row"><label class="f">Start from a saved area<select id="ar-load"><option value="">(blank)</option></select></label><label class="f">Area name<input id="ar-name" maxlength="40" placeholder="e.g. ubin-north"></label></div>
     <div id="ar-map" class="amap" aria-label="Map for drawing the geofence, area of operation and launch point"></div>
     <div class="e" id="ar-tiles"></div>
     <div id="ar-check"></div>
@@ -194,7 +194,7 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
     <div class="e">Upload a sector KML with placemarks <b>GCSlocation</b> (a point), <b>GeoFence</b> and <b>OpsArea</b> (polygons). The planner splits the OpsArea between the drones, stacks them in altitude layers and checks separation; a refusal is shown, never worked around. Output goes to a new <code>missions/&lt;site&gt;-&lt;date&gt;/</code> folder, one plan per drone, ready for a Fleet profile.</div>
     <div class="row"><label class="f">KML file<input type="file" id="pl-file" accept=".kml"></label></div>
     <div class="bar"><button class="btn" id="pl-up" type="button">Upload KML</button><span class="e" id="pl-upmsg"></span></div>
-    <div class="row"><label class="f">Sector<select id="pl-kml"></select></label><label class="f">Site name<input id="pl-site" maxlength="40" placeholder="e.g. seletar-north"></label></div>
+    <div class="row"><label class="f">Sector<select id="pl-kml"></select></label><label class="f">Site name<input id="pl-site" maxlength="40" placeholder="e.g. ubin-north"></label></div>
     <div class="row">
      <label class="f">Drones<input id="pl-n" type="number" min="1" max="8" step="1" value="2"></label>
      <label class="f">Altitude (m)<input id="pl-alt" type="number" min="10" max="120" step="1" value="30"></label>
@@ -352,7 +352,7 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
  <div class="verdict" style="justify-content:space-between"><h2 style="margin:0">Assistant</h2><button class="btn" id="asClose" type="button">Close</button></div>
  <div class="e" id="asStatus">Checking the model…</div>
  <div class="e">It reads runs, missions, profiles and the docs, explains, and drafts profiles or planner settings for you to apply. It can <b>stop</b> aircraft (hold, return, land) at any time. It can <b>fly a run only if you authorised it with "delegate to the assistant"</b>; then the console presses each gate when it is due. Your pilots' handsets stay the override.</div>
- <textarea id="asQ" rows="3" placeholder="e.g. Why didn't ARTEX115 arm in the last run?  /  Plan Seletar with 2 drones at 30 m"></textarea>
+ <textarea id="asQ" rows="3" placeholder="e.g. Why didn't ARTEX115 arm in the last run?  /  Plan Pulau Ubin with 2 drones at 30 m"></textarea>
  <div class="bar"><button class="btn solid" id="asAsk" type="button">Ask</button><span class="e" id="asMsg"></span></div>
  <div id="asOut"></div>
 </div>

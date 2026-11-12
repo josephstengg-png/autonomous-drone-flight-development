@@ -23,11 +23,11 @@ class Scripted:
 
 
 def test_read_tools_run_and_their_results_go_back_to_the_model():
-    llm = Scripted([[("list_areas", {})], "There are several saved areas, including seletar-west-camp."])
+    llm = Scripted([[("list_areas", {})], "There are several saved areas, including sample-camp."])
     r = agent.ask("What areas do we have?", llm=llm)
     assert r["answer"].startswith("There are") and r["calls"][0]["tool"] == "list_areas" and not r["calls"][0]["refused"]
     tool_msg = [m for m in llm.seen[1][0] if m["role"] == "tool"][0]
-    assert "seletar-west-camp" in tool_msg["content"]
+    assert "sample-camp" in tool_msg["content"]
 
 
 def test_the_model_is_only_offered_read_and_draft_tools():
@@ -48,12 +48,12 @@ def test_a_tool_it_may_not_use_is_refused_logged_and_never_runs():
 
 
 def test_a_directive_becomes_a_validated_planner_proposal_and_bad_numbers_are_flagged():
-    llm = Scripted([[("propose_planner_settings", dict(kml="ops/seletar-west-camp.kml", drones=2, altitude_m=30, scan="lawnmower"))],
+    llm = Scripted([[("propose_planner_settings", dict(kml="ops/sample-camp.kml", drones=2, altitude_m=30, scan="lawnmower"))],
                     "Here are the settings: 2 drones at 30 m."])
-    r = agent.ask("Survey Seletar with 2 drones at 30 m", llm=llm)
+    r = agent.ask("Survey the sample camp with 2 drones at 30 m", llm=llm)
     p = r["proposals"][0]
     assert p["proposal"] == "planner_settings" and p["errors"] == [] and p["drones"] == 2
-    bad = json.loads(tools.run_tool("propose_planner_settings", dict(kml="ops/seletar-west-camp.kml", drones=2, altitude_m=500)))
+    bad = json.loads(tools.run_tool("propose_planner_settings", dict(kml="ops/sample-camp.kml", drones=2, altitude_m=500)))
     assert any("Altitude" in e for e in bad["errors"])
 
 
@@ -61,9 +61,9 @@ def test_drafted_profiles_are_validated_but_not_saved(tmp_path, monkeypatch):
     from artex.console import gs_fleet as fleet
     monkeypatch.setattr(fleet, "FLEET_DIR", tmp_path / "fleet")
     out = json.loads(tools.run_tool("propose_fleet_profile", dict(
-        name="Seletar pair upload", mode="upload",
-        aircraft=[dict(sysid=113, plan="missions/seletar/mission_drones/drone-2.plan"),
-                  dict(sysid=115, plan="missions/seletar/mission_drones/drone-1.plan")])))
+        name="Sample pair upload", mode="upload",
+        aircraft=[dict(sysid=113, plan="missions/sample/mission_drones/drone-2.plan"),
+                  dict(sysid=115, plan="missions/sample/mission_drones/drone-1.plan")])))
     assert out["errors"] == [] and not (tmp_path / "fleet").exists()
     assert json.loads(tools.run_tool("propose_bench_profile", dict(name="b", sysids=[113, 115], stage="takeoff")))["profile"]["sysids"] == [113, 115]
 

@@ -145,8 +145,8 @@ def test_a_drone_with_no_waypoints_contributes_no_transit_violations():
 
 # --- regression against the real sectors -------------------------------------
 
-def test_the_real_safti_mission_still_passes():
-    mission = parse_kml(ROOT / "ops" / "SAFTI city.kml")
+def test_the_urban_sample_mission_still_passes():
+    mission = parse_kml(ROOT / "ops" / "sample-urban.kml")
     result = MultiAgentPlanner().run(mission, load_config(ROOT / "config.example.json"))
     assert result.guardrail_passed, result.warnings
 

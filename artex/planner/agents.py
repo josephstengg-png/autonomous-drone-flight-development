@@ -347,7 +347,7 @@ def _coverage_warnings(mission: MissionInput, drones: list[DronePlan], config: P
     """Does the scan actually reach the edges of the area it was asked to search?
 
     Lanes are centred inside each cell, so the outermost swath can stop short of a boundary,
-    and a concave corner can fall between two cells' lanes. Measured on the SAFTI urban
+    and a concave corner can fall between two cells' lanes. Measured on the sample urban
     sector (16 Sep 2026): up to 4.5 m of the edge lay outside every camera swath. The
     interior is covered by construction -- lane pitch is narrower than the swath -- so only
     the boundary is walked, which is also what makes this cheap enough to run on every plan.

@@ -1,0 +1,71 @@
+{
+  "fileType": "Plan",
+  "groundStation": "QGroundControl",
+  "version": 1,
+  "geoFence": {
+    "circles": [],
+    "polygons": [
+      {
+        "inclusion": true,
+        "polygon": [
+          [
+            1.41539,
+            91.8618
+          ],
+          [
+            1.41539,
+            91.8654
+          ],
+          [
+            1.41901,
+            91.8654
+          ],
+          [
+            1.41901,
+            91.8618
+          ],
+          [
+            1.41539,
+            91.8618
+          ]
+        ]
+      }
+    ],
+    "version": 2
+  },
+  "rallyPoints": {
+    "points": [],
+    "version": 2
+  },
+  "mission": {
+    "cruiseSpeed": 13.0,
+    "firmwareType": 12,
+    "globalPlanAltitudeMode": 1,
+    "hoverSpeed": 5,
+    "vehicleType": 2,
+    "items": [],
+    "plannedHomePosition": [
+      1.4172,
+      91.8636,
+      0.0
+    ],
+    "version": 2
+  },
+  "planner": {
+    "name": "kml-baseline",
+    "guardrailPassed": true,
+    "warnings": [],
+    "imaging": {
+      "altitude_m": 30.0,
+      "lane_spacing_m": 25.0,
+      "gsd_cm_px": 2.6,
+      "cruise_speed_m_s": 13.0
+    },
+    "layers": []
+  },
+  "x-multiDrone": {
+    "droneCount": 0,
+    "requestedDroneCount": 0,
+    "assignment": "comment field on each mission item"
+  }
+}

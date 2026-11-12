@@ -16,7 +16,7 @@ ROOT = Path(__file__).parents[1]
 def _planned_result(scan_type="lawnmower", number_of_drones=3):
     from dataclasses import replace
 
-    mission = parse_kml(ROOT / "ops" / "SAFTI city.kml")
+    mission = parse_kml(ROOT / "ops" / "sample-urban.kml")
     config = replace(load_config(ROOT / "config.example.json"), scan_type=scan_type, number_of_drones=number_of_drones)
     return MultiAgentPlanner().run(mission, config), config
 

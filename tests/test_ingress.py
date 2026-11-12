@@ -30,7 +30,7 @@ from artex.planner.models import Coordinate, DronePlan, MissionInput, PlannerCon
 from artex.planner.qgc_plan import build_qgc_plan
 
 ROOT = Path(__file__).parents[1]
-SECTORS = ["toa-payoh-urban.kml", "pulau-ubin-west.kml", "SAFTI city.kml"]
+SECTORS = ["toa-payoh-urban.kml", "pulau-ubin-west.kml", "sample-urban.kml"]
 FLEET = (DroneSpec(2.3, 1.00, "light"), DroneSpec(2.6, 0.90, "medium"), DroneSpec(3.0, 0.75, "heavy"))
 SQUARE = [Point(-800.0, -800.0), Point(800.0, -800.0), Point(800.0, 800.0), Point(-800.0, 800.0)]
 
@@ -386,7 +386,7 @@ def test_separation_is_judged_leg_by_leg_not_over_the_whole_sortie():
 
 def test_coverage_is_measured_and_reported():
     """The urban sector leaves slivers of its own edge unimaged; the flown sector does not."""
-    urban = MultiAgentPlanner().run(_mission("safti-urban.kml"), PlannerConfig())
+    urban = MultiAgentPlanner().run(_mission("sample-urban-2.kml"), PlannerConfig())
     assert any(w.startswith("coverage:") for w in urban.warnings)
     flown = MultiAgentPlanner().run(_mission("toa-payoh-urban.kml"), PlannerConfig())
     assert not [w for w in flown.warnings if w.startswith("coverage:")]

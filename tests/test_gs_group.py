@@ -115,7 +115,7 @@ def dirs(tmp_path, monkeypatch):
     return tmp_path
 
 
-SELETAR = (core.ROOT / "ops" / "seletar-west-camp.kml")
+CAMP = (core.ROOT / "ops" / "sample-camp.kml")
 
 
 def test_a_kml_the_planner_cannot_read_is_refused_and_nothing_is_overwritten(dirs):
@@ -123,20 +123,20 @@ def test_a_kml_the_planner_cannot_read_is_refused_and_nothing_is_overwritten(dir
         planner.save_kml("bad.kml", "<kml><Document><Placemark><name>x</name></Placemark></Document></kml>")
     with pytest.raises(ValueError, match="DOCTYPE"):
         planner.save_kml("evil.kml", '<!DOCTYPE x [<!ENTITY a "b">]><kml/>')
-    a = planner.save_kml("Seletar West.kml", SELETAR.read_text())
-    b = planner.save_kml("Seletar West.kml", SELETAR.read_text())
-    assert a["path"] == "ops/seletar-west.kml" and b["path"] == "ops/seletar-west-2.kml"
+    a = planner.save_kml("Sample West.kml", CAMP.read_text())
+    b = planner.save_kml("Sample West.kml", CAMP.read_text())
+    assert a["path"] == "ops/sample-west.kml" and b["path"] == "ops/sample-west-2.kml"
     assert abs(a["gcs"][0] - 1.4172) < 0.01 and a["fence_points"] >= 3
     assert not list((dirs / "ops").glob(".upload-*"))
 
 
 def test_the_planner_writes_one_plan_per_drone_into_a_new_folder(dirs):
-    k = planner.save_kml("seletar.kml", SELETAR.read_text())
-    r = planner.run_planner(k["path"], "Seletar test", 2, 30.0, 25.0, "lawnmower")
+    k = planner.save_kml("sample.kml", CAMP.read_text())
+    r = planner.run_planner(k["path"], "Sample test", 2, 30.0, 25.0, "lawnmower")
     assert r["ok"], r
     assert len(r["plans"]) == 2 and all(p["items"] > 3 for p in r["plans"])
-    assert r["folder"].endswith("seletar-test-" + time.strftime("%Y-%m-%d"))
-    again = planner.run_planner(k["path"], "Seletar test", 2, 30.0, 25.0, "lawnmower")
+    assert r["folder"].endswith("sample-test-" + time.strftime("%Y-%m-%d"))
+    again = planner.run_planner(k["path"], "Sample test", 2, 30.0, 25.0, "lawnmower")
     assert again["folder"] != r["folder"]                                    # never written over
     assert "Number of drones" in planner.run_planner(k["path"], "x", 0, 30.0, 25.0, "lawnmower")["error"]
 
@@ -144,12 +144,12 @@ def test_the_planner_writes_one_plan_per_drone_into_a_new_folder(dirs):
 # ---- the mission map ---------------------------------------------------------------------
 
 def test_the_map_gets_each_drones_path_the_fence_and_home():
-    v = planner.mission_view("missions/seletar")
+    v = planner.mission_view("missions/sample")
     assert [d["name"] for d in v["drones"]] == ["drone-1", "drone-2"]
     d1 = v["drones"][0]
     assert d1["items"] == 13 and d1["top_alt_m"] == 30.0 and d1["km"] > 0.1
     assert abs(d1["points"][0][0] - 1.4172) < 0.01 and v["fence"] and abs(v["home"][0] - 1.4172) < 0.001
-    assert "missions/seletar" in [m["folder"] for m in planner.list_missions()]
+    assert "missions/sample" in [m["folder"] for m in planner.list_missions()]
     with pytest.raises(ValueError):
         planner.mission_view("../etc")
 
@@ -157,17 +157,17 @@ def test_the_map_gets_each_drones_path_the_fence_and_home():
 def test_on_board_comes_from_a_fleet_runs_read_back(tmp_path):
     ok = dict(name="mission_uploaded", ok=True, detail="11 items on board, 11 in the plan")
     rec = dict(id="20261110-145105", kind="fleet", started="2026-11-10 14:51:05", mode="live",
-               result=dict(aircraft={"113": dict(plan="missions/seletar/mission_drones/drone-2.plan", checks=[ok]),
-                                     "115": dict(plan="missions/seletar/mission_drones/drone-1.plan",
+               result=dict(aircraft={"113": dict(plan="missions/sample/mission_drones/drone-2.plan", checks=[ok]),
+                                     "115": dict(plan="missions/sample/mission_drones/drone-1.plan",
                                                  checks=[dict(ok, ok=False)])}))
     (tmp_path / "20261110-145105.json").write_text(json.dumps(rec))
     found = planner.onboard_records(tmp_path)
-    assert found["missions/seletar/mission_drones/drone-2.plan"]["sysid"] == 113
-    assert "missions/seletar/mission_drones/drone-1.plan" not in found      # its read-back did not match
+    assert found["missions/sample/mission_drones/drone-2.plan"]["sysid"] == 113
+    assert "missions/sample/mission_drones/drone-1.plan" not in found      # its read-back did not match
 
 
 def test_a_newly_planned_folder_remembers_its_kml(dirs):
-    k = planner.save_kml("seletar.kml", SELETAR.read_text())
+    k = planner.save_kml("sample.kml", CAMP.read_text())
     r = planner.run_planner(k["path"], "map test", 2, 30.0, 25.0, "lawnmower")
     src = json.loads((planner.MISSIONS_DIR / Path(r["folder"]).name / "source.json").read_text())
     assert src["kml"] == k["path"] and src["drones"] == 2

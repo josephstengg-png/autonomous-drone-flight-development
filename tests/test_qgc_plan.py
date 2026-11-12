@@ -11,7 +11,7 @@ ROOT = Path(__file__).parents[1]
 
 
 def _mission():
-    return parse_kml(ROOT / "ops" / "SAFTI city.kml")
+    return parse_kml(ROOT / "ops" / "sample-urban.kml")
 
 
 def test_planned_home_position_is_lat_lon_alt_order():

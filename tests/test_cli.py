@@ -8,7 +8,7 @@ import pytest
 from artex.planner import cli, ollama_client
 
 ROOT = Path(__file__).parents[1]
-KML = ROOT / "ops" / "SAFTI city.kml"
+KML = ROOT / "ops" / "sample-urban.kml"
 CONFIG = ROOT / "config.example.json"
 
 

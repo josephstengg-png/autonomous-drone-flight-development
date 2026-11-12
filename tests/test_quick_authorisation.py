@@ -92,9 +92,9 @@ def test_quick_authorisation_needs_a_session_pilots_and_one_confirmation(gs):
 
 def test_risks_are_accepted_once_per_profile_and_asked_again_when_it_changes(gs):
     signed_in(gs, {"113": "Ann", "115": "Ben"})
-    fp = dict(name="Seletar pair", mode="mission", flight_type="props_on",
-              aircraft=[dict(sysid=113, plan="missions/seletar/mission_drones/drone-2.plan", link="radio"),
-                        dict(sysid=115, plan="missions/seletar/mission_drones/drone-1.plan", link="radio")])
+    fp = dict(name="Sample pair", mode="mission", flight_type="props_on",
+              aircraft=[dict(sysid=113, plan="missions/sample/mission_drones/drone-2.plan", link="radio"),
+                        dict(sysid=115, plan="missions/sample/mission_drones/drone-1.plan", link="radio")])
     for sid in (113, 115):
         gs("POST", "/api/preflight", dict(sysid=sid))
     s, r = gs("POST", "/api/fleet/authorise_quick", dict(profile=fp, confirm="AUTHORISE"))

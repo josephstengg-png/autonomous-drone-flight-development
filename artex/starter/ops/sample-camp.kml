@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Sample camp</name>
+  <Placemark><name>GCSlocation</name>
+    <description>Anonymised test fixture (shape kept, location moved).</description>
+    <Point><coordinates>91.86360000,1.41720000,0</coordinates></Point></Placemark>
+  <Placemark><name>GeoFence</name>
+    <description>Anonymised test fixture (shape kept, location moved).</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>91.86180000,1.41539000,0 91.86540000,1.41539000,0 91.86540000,1.41901000,0 91.86180000,1.41901000,0 91.86180000,1.41539000,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+  <Placemark><name>OpsArea</name>
+    <description>Anonymised test fixture (shape kept, location moved).</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>91.86270000,1.41728000,0 91.86450000,1.41728000,0 91.86450000,1.41872000,0 91.86270000,1.41872000,0 91.86270000,1.41728000,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+</Document>
+</kml>

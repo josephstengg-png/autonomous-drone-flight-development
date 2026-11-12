@@ -133,7 +133,7 @@ TOOLS = {
     "search_docs": ("read", search_docs, _fn("search_docs", "Search the product documentation and safety notes.", dict(query=S), ["query"])),
     "propose_planner_settings": ("draft", propose_planner_settings, _fn(
         "propose_planner_settings", "Turn the operator's directive into planner settings for them to review. Does not run the planner.",
-        dict(kml=dict(type="string", description="an area from list_areas, e.g. ops/seletar-west-camp.kml"), drones=I,
+        dict(kml=dict(type="string", description="an area from list_areas, e.g. ops/sample-camp.kml"), drones=I,
              altitude_m=N, overlap_pct=N, scan=dict(type="string", enum=["lawnmower", "voronoi"]), site=S), ["kml", "drones"])),
     "propose_fleet_profile": ("draft", propose_fleet_profile, _fn(
         "propose_fleet_profile", "Draft a fleet profile for the operator to review and save. aircraft = [{sysid, plan, link}].",

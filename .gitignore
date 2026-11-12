@@ -6,10 +6,8 @@ build/
 build/
 runs/
 missions/*/
-!missions/seletar/
-!missions/safti-2026-11-03/
+!missions/sample/
 !missions/toapayoh/
-!missions/stels-drone-cage/
 ops/.upload-*
 profiles/deleted/
 profiles/fleet/deleted/
@@ -17,3 +15,15 @@ profiles/fleet/deleted/
 operators.json
 artex/starter/docs/
 artex/starter/README.md
+# site data kept OUT of the public repo (13 Nov 2026): lab companions/registry, and real site areas
+companions.yaml
+artex-registry.yaml
+ops/*safti*
+ops/*SAFTI*
+ops/*seletar*
+ops/*stels*
+artex/starter/ops/*safti*
+artex/starter/ops/*SAFTI*
+artex/starter/ops/*seletar*
+profiles/fleet/*seletar*
+profiles/fleet/*stels*

@@ -27,9 +27,9 @@ def test_a_good_drawing_passes_and_bad_ones_say_why():
 
 
 def test_a_drawn_area_is_the_same_to_the_planner_as_the_kml_it_came_from(dirs):
-    r = planner.save_drawing("Seletar drawn", FENCE, AO, LAUNCH)
-    assert r["path"] == "ops/seletar-drawn.kml"
-    m = parse_kml(dirs / "ops" / "seletar-drawn.kml")
+    r = planner.save_drawing("Sample drawn", FENCE, AO, LAUNCH)
+    assert r["path"] == "ops/sample-drawn.kml"
+    m = parse_kml(dirs / "ops" / "sample-drawn.kml")
     assert len(m.geo_fence.coordinates) == 5 and len(m.ops_area.coordinates) == 5      # closed rings
     assert abs(m.gcs_location.latitude - 1.405367) < 1e-6
     plan = planner.run_planner(r["path"], "drawn", 2, 30.0, 25.0, "lawnmower")

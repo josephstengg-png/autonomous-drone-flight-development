@@ -22,9 +22,9 @@ def test_every_id_any_profile_touches_is_restored():
 
 
 def test_a_fleet_profile_can_ask_its_agents_for_the_mission_downlink():
-    p = fleet.normalise(dict(name="Seletar pair", mode="mission", flight_type="props_on", downlink="mission",
-                             aircraft=[dict(sysid=113, plan="missions/seletar/mission_drones/drone-2.plan"),
-                                       dict(sysid=115, plan="missions/seletar/mission_drones/drone-1.plan")]))
+    p = fleet.normalise(dict(name="Sample pair", mode="mission", flight_type="props_on", downlink="mission",
+                             aircraft=[dict(sysid=113, plan="missions/sample/mission_drones/drone-2.plan"),
+                                       dict(sysid=115, plan="missions/sample/mission_drones/drone-1.plan")]))
     assert fleet.validate(p) == []
     argv = fleet.agent_argv(p, p["aircraft"][0], "gsX")
     assert argv[argv.index("--downlink") + 1] == "mission"
