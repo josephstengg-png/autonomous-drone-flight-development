@@ -48,7 +48,8 @@ BENCH = dict(name="Pair bench arm", sysids=[113, 115], flight_type="bench", link
 
 
 def test_first_operator_then_sign_in_with_a_pin_only_stored_as_a_hash(gs, tmp_path):
-    assert gs("GET", "/api/session")[1] == dict(signed_in=False, has_operators=False, operator=None, pilots=None)
+    assert gs("GET", "/api/session")[1] == dict(signed_in=False, has_operators=False, operator=None, pilots=None, role=None,
+                                                require_signin=False)
     s, r = gs("POST", "/api/session/first_operator", dict(name="Joseph", pin="2468"))
     assert s == 200
     assert "2468" not in (tmp_path / "operators.json").read_text()
