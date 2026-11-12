@@ -253,3 +253,105 @@ def mission_view(folder: str) -> dict:
         except (OSError, ValueError, KeyError):
             pass
     return out
+
+
+# ---- drawing the area by hand (Phase A2, 12 Nov 2026) --------------------------------------
+
+def _inside(pt: list[float], poly: list[list[float]]) -> bool:
+    """Ray casting on (lat, lon); fine at sector scale."""
+    y, x = pt
+    hit = False
+    for (y1, x1), (y2, x2) in zip(poly, poly[1:] + poly[:1]):
+        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / ((y2 - y1) or 1e-15) + x1:
+            hit = not hit
+    return hit
+
+
+def _crosses(a, b, c, d) -> bool:
+    def orient(p, q, r):
+        return (q[1] - p[1]) * (r[0] - p[0]) - (q[0] - p[0]) * (r[1] - p[1])
+    return (orient(a, b, c) > 0) != (orient(a, b, d) > 0) and (orient(c, d, a) > 0) != (orient(c, d, b) > 0)
+
+
+def _self_intersects(poly: list[list[float]]) -> bool:
+    edges = list(zip(poly, poly[1:] + poly[:1]))
+    for i, (a, b) in enumerate(edges):
+        for j, (c, d) in enumerate(edges):
+            if abs(i - j) > 1 and {i, j} != {0, len(edges) - 1} and _crosses(a, b, c, d):
+                return True
+    return False
+
+
+def check_drawing(fence: list, ao: list, launch: list | None) -> list[str]:
+    """Reasons a drawn area cannot be planned. Coordinates are [lat, lon]."""
+    e = []
+    def ok_poly(p, name):
+        if not isinstance(p, list) or len(p) < 3:
+            e.append(f"Draw the {name} with at least 3 corners.")
+            return False
+        try:
+            pts = [[float(a), float(b)] for a, b in p]
+        except (TypeError, ValueError):
+            e.append(f"The {name} has a corner that is not a coordinate.")
+            return False
+        if any(not (-90 <= a <= 90 and -180 <= b <= 180) for a, b in pts):
+            e.append(f"The {name} has a corner off the map.")
+            return False
+        if _self_intersects(pts):
+            e.append(f"The {name}'s edges cross each other; redraw it without a figure of eight.")
+            return False
+        return True
+    f_ok, a_ok = ok_poly(fence, "geofence"), ok_poly(ao, "area of operation")
+    if f_ok and a_ok:
+        F = [[float(a), float(b)] for a, b in fence]
+        A = [[float(a), float(b)] for a, b in ao]
+        if not all(_inside(p, F) for p in A) or any(_crosses(a, b, c, d) for a, b in zip(A, A[1:] + A[:1])
+                                                    for c, d in zip(F, F[1:] + F[:1])):
+            e.append("The area of operation must lie entirely inside the geofence.")
+        if not launch or len(launch) != 2:
+            e.append("Place the launch point.")
+        elif not _inside([float(launch[0]), float(launch[1])], F):
+            e.append("The launch point must be inside the geofence.")
+    return e
+
+
+def drawing_kml(name: str, fence: list, ao: list, launch: list) -> str:
+    ring = lambda pts: " ".join(f"{float(lon):.8f},{float(lat):.8f},0" for lat, lon in list(pts) + [pts[0]])  # noqa: E731
+    esc = lambda t: (t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))  # noqa: E731
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>{esc(name)}</name>
+  <Placemark><name>GCSlocation</name>
+    <description>Launch point, drawn in the ARTEX console</description>
+    <Point><coordinates>{float(launch[1]):.8f},{float(launch[0]):.8f},0</coordinates></Point></Placemark>
+  <Placemark><name>GeoFence</name>
+    <description>Drawn in the ARTEX console</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>{ring(fence)}
+    </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+  <Placemark><name>OpsArea</name>
+    <description>Area of operation, drawn in the ARTEX console</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>{ring(ao)}
+    </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+</Document>
+</kml>
+"""
+
+
+def save_drawing(name: str, fence: list, ao: list, launch: list) -> dict:
+    """A hand-drawn area becomes a KML under ops/, through the same checked path as an upload."""
+    errs = check_drawing(fence, ao, launch)
+    if errs:
+        raise ValueError(" ".join(errs))
+    return save_kml(name or "drawn-area", drawing_kml(name or "Drawn area", fence, ao, launch))
+
+
+def read_area(kml: str) -> dict:
+    """An existing sector KML as polygons, so the editor can show or modify it."""
+    if not re.fullmatch(r"ops/[A-Za-z0-9._ -]+\.kml", kml or "") or not (OPS_DIR / Path(kml).name).is_file():
+        raise ValueError("Choose a KML from ops/.")
+    poly = kml_polygons(OPS_DIR / Path(kml).name)
+    if not poly:
+        raise ValueError("The planner could not read that KML.")
+    return dict(kml=kml, fence=poly["fence"][:-1] if poly["fence"][:1] == poly["fence"][-1:] else poly["fence"],
+                ao=poly["ops"][:-1] if poly["ops"][:1] == poly["ops"][-1:] else poly["ops"], launch=poly["gcs"])

@@ -13,3 +13,4 @@ ops/.upload-*
 profiles/deleted/
 profiles/fleet/deleted/
 .pytest_cache/
+operators.json

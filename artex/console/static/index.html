@@ -1,7 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ground Station</title>
+<title>ARTEX Ground Station</title>
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<script src="/static/vendor/leaflet/leaflet.js"></script>
 <style>
 :root{--bg:#eef1f4;--panel:#fff;--ink:#16202a;--mute:#5b6b7a;--line:#d5dce3;--go:#1c7a46;--gob:#dff3e6;--no:#b3261e;--nob:#fbe3e1;
 --stale:#8a5a00;--staleb:#fdf0d2;--idle:#4a5a69;--idleb:#e3e8ed;--abort:#c4121a;--accent:#0b5cab;--accb:#dbeafe;--view:#f7f9fb;--grid:#d9e0e7;--path:#0b5cab;--fence:#b3261e;--trail:#1c7a46;--field:#fff;--d1:#0b5cab;--d2:#c2410c;--d3:#15803d;--d4:#7c3aed;--ops:#5b6b7a}
@@ -89,10 +91,17 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
 .fac select{border:1px solid var(--line);background:var(--field);border-radius:6px;padding:5px 6px;font-size:13px;min-width:0;width:100%}
 .gates{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:600px){.gates{grid-template-columns:1fr}}
 .arm.go{background:#0b5cab}
-</style></head>
+.amap{height:420px;border:1px solid var(--line);border-radius:6px;margin-top:8px;background:var(--view)}
+.v3{height:420px;border:1px solid var(--line);border-radius:6px;margin-top:8px;background:var(--view);position:relative;overflow:hidden}
+.v3 canvas{height:100%;border:0;border-radius:0}
+.modes{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.modes .btn.on{background:var(--accent);color:#fff}
+.vtx{width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+</style>
+<script type="importmap">{"imports":{"three":"/static/vendor/three/three.module.min.js","three/addons/":"/static/vendor/three/"}}</script>
+</head>
 <body><div class="wrap">
 <header>
- <div><h1>Ground Station <span class="badge" id="modeBadge"></span></h1>
+ <div><h1>ARTEX Ground Station <span class="badge" id="modeBadge"></span></h1>
  <div class="sub" id="modeSub"></div></div>
  <div class="bar" style="margin:0"><span class="e">Theme</span>
   <button class="btn" id="thm" type="button">Auto</button></div>
@@ -101,6 +110,7 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
 
 <!-- 1 CONNECT -->
 <section class="page on" id="pg-connect">
+ <div class="panel" id="ses"><h2>Operator and crew</h2><div id="sesBody"></div></div>
  <div class="panel"><h2>Link and preflight</h2>
   <div class="e">Preflight is read-only: it arms nothing and writes no parameter. Over the radio it must be GO within the last 10 minutes before a props-on run can be authorised. It checks the ground link, the right backpack, one relay, link loss and delay, the abort flag, and the aircraft's heartbeat.</div>
   <div class="row" id="acList"></div>
@@ -161,6 +171,21 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
     <div class="legend"><span><i class="sw" style="background:var(--path)"></i>planned (an estimate)</span><span><i class="sw" style="background:var(--fence)"></i>agent ceiling 1.2 m</span></div>
     <details><summary class="e">The command this profile starts</summary><pre class="cmd" id="edCmd"></pre></details>
    </div>
+   <div class="panel"><h2>Draw the area</h2>
+    <div class="e">Click on the map to draw the <b>geofence</b>, the <b>area of operation</b> (inside the fence) and the <b>launch point</b>. Drag a corner to move it. To keep the drones out of something inside the area, draw the area around it (a notch): the planner routes around a notch. Save makes a KML under <code>ops/</code> that the planner below uses.</div>
+    <div class="modes" id="ar-modes">
+     <button class="btn" data-m="fence" type="button">1 Geofence</button>
+     <button class="btn" data-m="ao" type="button">2 Area of operation</button>
+     <button class="btn" data-m="launch" type="button">3 Launch point</button>
+     <button class="btn" id="ar-undo" type="button">Undo corner</button>
+     <button class="btn danger" id="ar-clear" type="button">Clear shape</button>
+    </div>
+    <div class="row"><label class="f">Start from a saved area<select id="ar-load"><option value="">(blank)</option></select></label><label class="f">Area name<input id="ar-name" maxlength="40" placeholder="e.g. seletar-north"></label></div>
+    <div id="ar-map" class="amap" aria-label="Map for drawing the geofence, area of operation and launch point"></div>
+    <div class="e" id="ar-tiles"></div>
+    <div id="ar-check"></div>
+    <div class="bar"><button class="btn solid" id="ar-save" type="button">Save area</button><span class="e" id="ar-msg"></span></div>
+   </div>
    <div class="panel"><h2>Plan a mission from a KML</h2>
     <div class="e">Upload a sector KML with placemarks <b>GCSlocation</b> (a point), <b>GeoFence</b> and <b>OpsArea</b> (polygons). The planner splits the OpsArea between the drones, stacks them in altitude layers and checks separation; a refusal is shown, never worked around. Output goes to a new <code>missions/&lt;site&gt;-&lt;date&gt;/</code> folder, one plan per drone, ready for a Fleet profile.</div>
     <div class="row"><label class="f">KML file<input type="file" id="pl-file" accept=".kml"></label></div>
@@ -178,7 +203,9 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
    <div class="panel"><h2>Missions on the map</h2>
     <div class="e">Each drone's planned path, drawn from its <code>.plan</code> file: what the agent uploads. <b>On board</b> means an agent read that mission back from the aircraft in a Fleet run and the item count matched. It is not QGC's view, which goes stale.</div>
     <label class="f">Mission<select id="mv-sel"></select></label>
+    <div class="modes"><button class="btn on" id="mv-2d" type="button">2D map</button><button class="btn" id="mv-3d" type="button">3D view</button><label class="e" id="mv-exl" hidden>Heights <select id="mv-ex"><option value="1">true scale</option><option value="3" selected>exaggerated &times;3</option><option value="10">exaggerated &times;10</option></select></label><span class="e" id="mv-3dnote"></span></div>
     <canvas id="mv-cv" style="height:400px;margin-top:8px" aria-label="Mission map: fence, operating area and each drone's path"></canvas>
+    <div id="mv-v3" class="v3" hidden aria-label="3D view of the mission: fence, area, each drone's path at its altitude"></div>
     <div class="legend" id="mv-leg"></div>
     <table id="mv-tab" style="margin-top:6px"></table>
    </div>
@@ -205,31 +232,19 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
   </div>
   <div class="stack">
    <div class="panel" id="setup">
-    <div class="steph"><i>1</i>Risks you are accepting</div>
-    <div id="risks"></div>
-    <hr class="divider">
-    <div class="steph"><i>2</i>Confirm the aircraft and the area</div>
-    <div id="confs"></div>
-    <hr class="divider">
-    <div class="steph"><i>3</i>Take responsibility</div>
-    <div class="e">This is recorded with the run: your name, each risk above, the confirmations, and these words. It takes effect for this exact profile for 15 minutes. It does not change what the agent or the handset will refuse.</div>
-    <div class="row">
-     <label class="f"><span>Responsible operator</span><input id="opName" autocomplete="name" placeholder="your name"></label>
-     <label class="f"><span>Type the aircraft name: <b id="acName">ARTEX113</b></span><input id="acType" autocomplete="off"></label>
-    </div>
-    <label class="f"><span>Type exactly: <b id="phraseShow"></b></span><input id="phrase" autocomplete="off"></label>
-    <div class="bar"><button class="btn solid" id="authBtn" type="button" disabled>Authorise this run</button><span class="e" id="authMsg"></span></div>
+    <div class="steph"><i>1</i>Authorise this run</div>
+    <div id="qa-run"></div>
     <div class="auth" id="authBox" hidden></div>
    </div>
    <div class="panel" id="ctl">
-    <div class="steph"><i>4</i>Start the agent, then arm</div>
+    <div class="steph"><i>2</i>Start the agent, then arm</div>
     <div class="e">Start connects the agent and stops at READY. It does not arm. Arming is a separate, deliberate press-and-hold below, and the agent also waits for the ARM word itself.</div>
     <div class="bar"><button class="btn solid" id="startBtn" type="button" disabled>Start agent (stops at READY)</button><span class="e" id="startMsg"></span></div>
     <hr class="divider">
     <button class="arm" id="armBtn" type="button" disabled><div class="fill" id="armFill"></div><span><span id="armLbl">HOLD TO ARM</span><span class="why" id="armWhy">Start the agent first</span></span></button>
     <div class="e" id="gateClock" style="margin-top:6px"></div>
     <hr class="divider">
-    <div class="steph"><i>5</i>While it runs</div>
+    <div class="steph"><i>3</i>While it runs</div>
     <div class="e"><b>The handset is the real override.</b> Take over with ch5 OFF (ch7 stays centre). Stop with ch8 kill, <b>held 5 s</b>. The buttons here go through the agent and the same link; they are not a substitute.</div>
     <div class="bar" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
      <button class="abort" id="abortBtn" type="button" disabled>ABORT<br><span style="font-weight:500;font-size:12px">agent: land here</span></button>
@@ -283,23 +298,12 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
   </div>
   <div class="stack">
    <div class="panel" id="fSetup">
-    <div class="steph"><i>1</i>Risks you are accepting</div>
-    <div id="fRisks"></div>
-    <hr class="divider">
-    <div class="steph"><i>2</i>Confirm the aircraft and the area</div>
-    <div id="fConfs"></div>
-    <hr class="divider">
-    <div class="steph"><i>3</i>Take responsibility: one pilot per aircraft</div>
-    <div class="e">Recorded with the run. Each aircraft's handset is its override, so each needs its own named pilot, and one person cannot hold two.</div>
-    <div class="row"><label class="f"><span>Responsible operator</span><input id="fOp" autocomplete="name" placeholder="your name"></label></div>
-    <div class="row" id="fPilots"></div>
-    <label class="f"><span>Type every aircraft name: <b id="fAcNames"></b></span><input id="fAcType" autocomplete="off"></label>
-    <label class="f"><span>Type exactly: <b id="fPhraseShow"></b></span><input id="fPhrase" autocomplete="off"></label>
-    <div class="bar"><button class="btn solid" id="fAuthBtn" type="button" disabled>Authorise this fleet run</button><span class="e" id="fAuthMsg"></span></div>
+    <div class="steph"><i>1</i>Authorise this fleet run</div>
+    <div id="qa-fleet"></div>
     <div class="auth" id="fAuthBox" hidden></div>
    </div>
    <div class="panel">
-    <div class="steph"><i>4</i>Prepare, then the two gates</div>
+    <div class="steph"><i>2</i>Prepare, then the two gates</div>
     <div class="e">Prepare starts one agent per aircraft: it uploads and reads back the mission and runs the preflight contract, then holds the link. Every aircraft must be READY or nobody arms. <b>Indoors there is no GPS fix, so a real aircraft stops at NOT READY</b>; use "Upload and verify" there.</div>
     <div class="bar"><button class="btn solid" id="fStart" type="button" disabled>Prepare every aircraft</button><span class="e" id="fStartMsg"></span></div>
     <div class="fcards" id="fCards" style="margin-top:10px"></div>
@@ -310,7 +314,7 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
     </div>
     <div class="e" id="fClock" style="margin-top:6px"></div>
     <hr class="divider">
-    <div class="steph"><i>5</i>While they fly</div>
+    <div class="steph"><i>3</i>While they fly</div>
     <div class="e"><b>Each pilot's handset is the real override</b> (ch5 OFF, or ch8 kill held 5 s). If one aircraft faults, the others are put in HOLD automatically. These buttons go through the agents and the radios.</div>
     <div class="bar" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
      <button class="btn" id="fHoldAll" type="button" disabled>HOLD ALL</button>
@@ -343,13 +347,15 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function api(method, path, body) {
-  const r = await fetch(path, {method, headers: {'X-GS-Client': 'ui', 'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+  const h = {'X-GS-Client': 'ui', 'Content-Type': 'application/json'}; if (SESSION) h['X-GS-Session'] = SESSION;
+  const r = await fetch(path, {method, headers: h, body: body ? JSON.stringify(body) : undefined});
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw Object.assign(new Error(j.error || r.statusText), {status: r.status});
   return j;
 }
 function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} return null; }
 
+let SESSION = (() => { try { return sessionStorage.getItem('gs-session'); } catch (e) { return null; } })(), SES = {};
 let ST = {}, PROFILES = [], ED = null, EDID = null, PREV = null, RUNPROF = null, RUNPREV = null, TOKEN = null, TOKEN_AT = 0;
 let LOSTLINK = false, LASTBATT = null, SNAP = null, SINCE = 0, FEED = [], poll = null, page = 'connect';
 
@@ -365,7 +371,7 @@ function rail() {
   $('rail').innerHTML = PAGES.map(([k, n, t]) => `<button class="step ${k === page ? 'cur' : ''} ${(k === 'run' && live) || (k === 'fleet' && flive) ? 'live' : ''}" data-k="${k}" type="button"><div class="n">${n}</div><div class="t">${t}</div><div class="s">${k === 'run' && live ? 'RUN ACTIVE: ' + SNAP.state.toUpperCase() : k === 'fleet' && flive ? 'FLEET ACTIVE: ' + FSNAP.state.toUpperCase() : k === 'prof' ? PROFILES.length + ' saved' : k === 'fleet' ? FPROFILES.length + ' fleet profiles' : ''}&nbsp;</div></button>`).join('');
   $('rail').querySelectorAll('.step').forEach(b => b.onclick = () => go(b.dataset.k));
 }
-function go(k) { page = k; PAGES.forEach(([p]) => $('pg-' + p).classList.toggle('on', p === k)); rail(); if (k === 'rec') loadRecs(); if (k === 'run') refreshRun(); if (k === 'prof') { edPreview(); loadMissions(); } if (k === 'fleet') fPreview(); redraw(); }
+function go(k) { page = k; PAGES.forEach(([p]) => $('pg-' + p).classList.toggle('on', p === k)); rail(); if (k === 'rec') loadRecs(); if (k === 'run') refreshRun(); if (k === 'prof') { edPreview(); loadMissions(); arInit(); arLoadList(); setTimeout(() => AR.map && AR.map.invalidateSize(), 50); } if (k === 'fleet') fPreview(); redraw(); }
 
 /* ---------- connect ---------- */
 function acCard(s) {
@@ -487,45 +493,17 @@ async function refreshRun() {
   RUNPREV = await api('POST', '/api/profiles/preview', RUNPROF);
   $('runSum').innerHTML = `<dt>Aircraft</dt><dd>${acNames(RUNPROF).join(', ')}, ${esc(RUNPROF.link === 'radio' ? 'over the ELRS radio' : 'over USB')}${acNames(RUNPROF).length > 1 ? ' <b>(ARM ALL)</b>' : ''}</dd><dt>Flight</dt><dd>${esc({bench: 'bench, props OFF', tether: 'tethered, props ON', free: 'free flight, props ON'}[RUNPROF.flight_type])}</dd>
     <dt>Until</dt><dd>${esc(RUNPROF.stage)}: ${esc((ST.stages.find(s => s[0] === RUNPROF.stage) || [])[1])}</dd><dt>Numbers</dt><dd>${RUNPROF.height_m} m, hold ${RUNPROF.hold_s} s, window ${RUNPROF.wait_s} s</dd>`;
-  $('acName').textContent = acNames(RUNPROF).join(', '); $('phraseShow').textContent = ST.phrase;
+  if (!TOKEN) qaRender('run', RUNPREV, RUNPROF);
   $('armLbl').textContent = acNames(RUNPROF).length > 1 ? 'HOLD TO ARM ALL' : 'HOLD TO ARM';
-  if (!TOKEN) {
-    const A = RUNPREV.assessment, blocks = A.filter(i => i.level === 'block'), acc = A.filter(i => i.level === 'accept'), notes = A.filter(i => i.level === 'note');
-    $('risks').innerHTML = blocks.map(i => `<div class="blockbox"><b>BLOCKED: ${esc(i.title)}</b><div class="e" style="color:var(--ink)">${esc(i.text)}</div></div>`).join('')
-      + acc.map(i => `<label class="risk chk"><input type="checkbox" class="acc" data-id="${esc(i.id)}"><span><b>${esc(i.title)}</b><div class="e">${esc(i.text)}</div></span></label>`).join('')
-      + (acc.length || blocks.length ? '' : '<div class="e">No risk to accept for this profile.</div>')
-      + notes.map(i => `<div class="note"><b>${esc(i.title)}</b><div class="e">${esc(i.text)}</div></div>`).join('');
-    $('confs').innerHTML = RUNPREV.confirmations.map(c => `<label class="chk"><input type="checkbox" class="cf" data-id="${esc(c.id)}"><span>${esc(c.text)}</span></label>`).join('');
-    document.querySelectorAll('.acc,.cf').forEach(c => c.onchange = authState);
-  }
   authState(); ctlState(); redraw();
 }
 $('runProf').onchange = () => { TOKEN = null; $('authBox').hidden = true; refreshRun(); };
-['opName', 'acType', 'phrase'].forEach(id => $(id).addEventListener('input', authState));
-$('opName').value = store('gs-operator') || '';
-function authState() {
-  const ok = RUNPREV && !RUNPREV.errors.length && !RUNPREV.assessment.some(i => i.level === 'block') && !running() && !TOKEN
-    && [...document.querySelectorAll('.acc,.cf')].every(c => c.checked)
-    && $('opName').value.trim().length > 1 && RUNPROF && $('acType').value.toUpperCase().split(/[\s,+]+/).filter(Boolean).sort().join(',') === acNames(RUNPROF).sort().join(',') && $('phrase').value.trim().toUpperCase() === ST.phrase;
-  $('authBtn').disabled = !ok;
-  $('setup').style.opacity = running() ? .55 : 1;
-  $('authMsg').textContent = TOKEN || ok ? '' : 'Every box, your name, the aircraft and the words are needed.';
-}
-$('authBtn').onclick = async () => {
-  store('gs-operator', $('opName').value.trim());
-  const accepted = [...document.querySelectorAll('.acc')].map(c => c.dataset.id), confirmed = [...document.querySelectorAll('.cf')].map(c => c.dataset.id);
-  try {
-    const r = await api('POST', '/api/run/authorise', {profile: RUNPROF, operator: $('opName').value, aircraft: $('acType').value, phrase: $('phrase').value, accepted, confirmed});
-    TOKEN = r.token; TOKEN_AT = Date.now();
-    $('authBox').hidden = false; tick();
-  } catch (e) { $('authMsg').textContent = e.message; }
-  authState(); ctlState();
-};
+function authState() { qaState('run'); $('setup').style.opacity = running() ? .55 : 1; }
 function tick() {
   if (TOKEN) {
     const left = Math.max(0, ST.ttl_s - (Date.now() - TOKEN_AT) / 1000);
     if (left <= 0) { TOKEN = null; $('authBox').hidden = true; refreshRun(); return; }
-    $('authBox').innerHTML = `<b>Authorised</b> by ${esc($('opName').value.trim())} for ${acNames(RUNPROF).join(', ')}, this exact profile. Expires in ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}. <button class="btn" id="revoke" type="button">Withdraw</button>`;
+    $('authBox').innerHTML = `<b>Authorised</b> by ${esc(SES.operator || '')} for ${acNames(RUNPROF).join(', ')}, this exact profile. Expires in ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}. <button class="btn" id="revoke" type="button">Withdraw</button>`;
     $('revoke').onclick = () => { TOKEN = null; $('authBox').hidden = true; refreshRun(); };
   }
   if (SNAP && SNAP.state === 'ready' && SNAP.t.ready) {
@@ -582,7 +560,7 @@ async function pollOnce() {
   if (s.state === 'none') return;
   SNAP = Object.assign(SNAP || {}, s); if (s.feed) { s.feed.forEach(f => { if (f.kind === 'event' && f.data.event === 'battery') LASTBATT = f.data; if (f.kind === 'event' && f.data.event === 'takeover_classified') LOSTLINK = f.data.source === 'link_loss'; }); SINCE += s.feed.length; const ul = $('feed'); s.feed.forEach(f => ul.insertAdjacentHTML('afterbegin', line(f))); }
   ctlState(); rail(); tick(); redraw();
-  if (['done', 'ended'].includes(s.state)) { stopPoll(); showResult(s); TOKEN = null; $('authBox').hidden = true; $('acType').value = ''; $('phrase').value = ''; refreshRun(); }
+  if (['done', 'ended'].includes(s.state)) { stopPoll(); showResult(s); TOKEN = null; $('authBox').hidden = true; refreshRun(); }
 }
 function startPoll() { if (!poll) poll = setInterval(pollOnce, 600); pollOnce(); }
 function stopPoll() { clearInterval(poll); poll = null; }
@@ -624,6 +602,131 @@ async function showRec(id) {
 
 
 
+
+
+/* ---------- session and quick authorisation (Phase A2) ---------- */
+function setSession(tok) { SESSION = tok; try { tok ? sessionStorage.setItem('gs-session', tok) : sessionStorage.removeItem('gs-session'); } catch (e) {} }
+async function loadSession() { try { SES = await api('GET', '/api/session'); } catch (e) { SES = {}; } if (!SES.signed_in && SESSION) setSession(null); sesRender(); }
+function sesRender() {
+  const b = $('sesBody');
+  if (!SES.signed_in) {
+    const first = !SES.has_operators;
+    b.innerHTML = `<div class="e">${first ? 'No operator exists yet on this installation: create the first one. The PIN is stored only as a salted hash.' : 'Sign in to authorise runs. Once per session you name the crew and accept each profile\'s risks once; after that each run is one tick and one press-and-hold.'}</div>
+      <div class="row"><label class="f">Operator<input id="sesName" autocomplete="username"></label><label class="f">PIN (4 to 8 digits)<input id="sesPin" type="password" inputmode="numeric" autocomplete="current-password"></label></div>
+      <div class="bar"><button class="btn solid" id="sesGo" type="button">${first ? 'Create operator and sign in' : 'Sign in'}</button><span class="e" id="sesMsg"></span></div>`;
+    $('sesGo').onclick = async () => { try { const r = await api('POST', first ? '/api/session/first_operator' : '/api/session/signin', {name: $('sesName').value, pin: $('sesPin').value}); setSession(r.token); await loadSession(); refreshRun(); fPreview(); } catch (e) { $('sesMsg').textContent = e.message; } };
+    $('sesPin').addEventListener('keydown', e => { if (e.key === 'Enter') $('sesGo').click(); });
+    return;
+  }
+  b.innerHTML = `<div class="verdict"><span class="big" style="font-size:16px">Signed in: ${esc(SES.operator)}</span><button class="btn" id="sesOut" type="button">Sign out</button></div>
+    <div class="e" style="margin-top:6px">Crew: one named pilot per aircraft, each holding that aircraft's handset. Needed before any run is authorised.</div>
+    <div class="row">${ST.aircraft.map(a => `<label class="f">Pilot for ARTEX${a}<input class="sesPil" data-s="${a}" value="${esc((SES.pilots || {})[a] || '')}" autocomplete="off"></label>`).join('')}</div>
+    <div class="bar"><button class="btn solid" id="sesCrew" type="button">Save crew</button><label class="chk" style="margin:0"><input type="checkbox" id="sesAuto" checked><span>Re-run preflight every 10 min while signed in</span></label><span class="e" id="sesMsg"></span></div>
+    <details><summary class="e">Add another operator</summary><div class="row"><label class="f">Name<input id="sesNewName"></label><label class="f">PIN<input id="sesNewPin" type="password" inputmode="numeric"></label></div><div class="bar"><button class="btn" id="sesAdd" type="button">Add operator</button></div></details>`;
+  $('sesOut').onclick = async () => { try { await api('POST', '/api/session/signout', {}); } catch (e) {} setSession(null); TOKEN = null; FTOKEN = null; await loadSession(); refreshRun(); fPreview(); };
+  $('sesCrew').onclick = async () => { const pilots = {}; document.querySelectorAll('.sesPil').forEach(i => pilots[i.dataset.s] = i.value);
+    try { await api('POST', '/api/session/crew', {pilots}); await loadSession(); $('sesMsg').textContent = 'Crew saved.'; refreshRun(); fPreview(); } catch (e) { $('sesMsg').textContent = e.message; } };
+  $('sesAdd').onclick = async () => { try { await api('POST', '/api/session/add_operator', {name: $('sesNewName').value, pin: $('sesNewPin').value}); $('sesMsg').textContent = 'Operator added.'; } catch (e) { $('sesMsg').textContent = e.message; } };
+}
+async function autoPreflight() { if (!SES.signed_in || !$('sesAuto') || !$('sesAuto').checked) return;
+  for (const a of ST.aircraft) { try { await api('POST', '/api/preflight', {sysid: a}); } catch (e) {} } await loadState(); connectRender(); }
+setInterval(autoPreflight, 10 * 60 * 1000);
+const QA = {run: {prev: null, prof: null}, fleet: {prev: null, prof: null}};
+function qaRender(kind, prev, prof) {
+  const box = $('qa-' + kind); QA[kind] = {prev, prof}; if (!box) return;
+  if (!prev) { box.innerHTML = ''; return; }
+  const ses = prev.session || {}, A = prev.assessment || [], blocks = A.filter(i => i.level === 'block'), acc = A.filter(i => i.level === 'accept'), notes = A.filter(i => i.level === 'note');
+  if (!ses.signed_in) { box.innerHTML = `<div class="blockbox"><b>Sign in first</b><div class="e" style="color:var(--ink)">On the Connect page: operator, PIN and the crew. Then each run here is one tick and one press-and-hold.</div></div><div class="bar"><button class="btn solid" id="qa-${kind}-go" type="button">Go to sign-in</button></div>`;
+    $(`qa-${kind}-go`).onclick = () => go('connect'); return; }
+  const miss = new Set(ses.missing_accept || []);
+  const pil = Object.entries(ses.pilots || {});
+  box.innerHTML = blocks.map(i => `<div class="blockbox"><b>BLOCKED: ${esc(i.title)}</b><div class="e" style="color:var(--ink)">${esc(i.text)}</div></div>`).join('')
+    + (acc.length ? (miss.size ? `<div class="e"><b>Risks for this profile</b>: accept once for this session (asked again only if the profile changes).</div>${acc.map(i => `<div class="risk"><b>${esc(i.title)}</b><div class="e">${esc(i.text)}</div></div>`).join('')}<div class="bar"><button class="btn solid" id="qa-${kind}-acc" type="button">Accept these risks for this session</button></div>`
+        : `<div class="note"><b>Risks accepted</b><div class="e">${acc.length} risk${acc.length > 1 ? 's' : ''} for this exact profile, accepted by ${esc(ses.operator)} this session: ${acc.map(i => esc(i.title)).join('; ')}.</div></div>`) : '')
+    + `<div class="note"><b>Pilots</b><div class="e">${pil.map(([k, v]) => v ? `ARTEX${esc(k)}: ${esc(v)}` : `<span class="err">ARTEX${esc(k)}: no pilot named</span>`).join(' &middot; ')}${(ses.missing_pilots || []).length ? ' &mdash; name them on the Connect page.' : ''}</div></div>`
+    + `<label class="chk"><input type="checkbox" id="qa-${kind}-cf"><span><b>For this run I confirm:</b><br>${(prev.confirmations || []).map(c => esc(c.text)).join('<br>')}</span></label>`
+    + `<button class="arm" id="qa-${kind}-hold" type="button" disabled><div class="fill" id="qa-${kind}-fill"></div><span>HOLD TO AUTHORISE<span class="why" id="qa-${kind}-why"></span></span></button>`
+    + `<label class="chk" style="opacity:.6"><input type="checkbox" disabled><span>Delegate the gates to the assistant <span class="e">(arrives in Phase C)</span></span></label>`
+    + `<span class="e" id="qa-${kind}-msg"></span>`
+    + notes.map(i => `<details><summary class="e">${esc(i.title)}</summary><div class="e">${esc(i.text)}</div></details>`).join('');
+  const accBtn = $(`qa-${kind}-acc`);
+  if (accBtn) accBtn.onclick = async () => { try { await api('POST', '/api/session/accept', {kind: kind === 'fleet' ? 'fleet' : 'single', profile: prof}); kind === 'fleet' ? fPreview() : refreshRun(); } catch (e) { $(`qa-${kind}-msg`).textContent = e.message; } };
+  $(`qa-${kind}-cf`).onchange = () => qaState(kind);
+  makeQaHold(kind);
+  qaState(kind);
+}
+function qaState(kind) {
+  const q = QA[kind], hold = $(`qa-${kind}-hold`); if (!hold || !q.prev) return;
+  const ses = q.prev.session || {}, blocked = (q.prev.errors || []).length || (q.prev.assessment || []).some(i => i.level === 'block');
+  const busy = kind === 'fleet' ? fActive() : running(), tok = kind === 'fleet' ? FTOKEN : TOKEN;
+  const why = !ses.signed_in ? 'Sign in first' : blocked ? 'Blocked: see above' : (ses.missing_accept || []).length ? 'Accept the risks above first' : (ses.missing_pilots || []).length ? 'Name the pilots first'
+    : busy ? 'A run is active' : tok ? 'Authorised' : !$(`qa-${kind}-cf`).checked ? 'Tick the confirmation' : 'Press and hold 1.2 s';
+  hold.disabled = why !== 'Press and hold 1.2 s'; $(`qa-${kind}-why`).textContent = why;
+}
+function makeQaHold(kind) {
+  const btn = $(`qa-${kind}-hold`); let t = null, at = 0;
+  const stop = () => { if (t) { clearInterval(t); t = null; } const f = $(`qa-${kind}-fill`); if (f) f.style.width = '0'; };
+  const start = e => { if (btn.disabled || t) return; e.preventDefault(); at = performance.now();
+    t = setInterval(async () => { const f = Math.min(1, (performance.now() - at) / 1200); $(`qa-${kind}-fill`).style.width = f * 100 + '%';
+      if (f >= 1) { stop(); try { const r = await api('POST', kind === 'fleet' ? '/api/fleet/authorise_quick' : '/api/run/authorise_quick', {profile: QA[kind].prof, confirm: 'AUTHORISE'});
+        if (kind === 'fleet') { FTOKEN = r.token; FTOKEN_AT = Date.now(); $('fAuthBox').hidden = false; fTick(); fCtl(); } else { TOKEN = r.token; TOKEN_AT = Date.now(); $('authBox').hidden = false; tick(); ctlState(); }
+        qaState(kind); } catch (er) { $(`qa-${kind}-msg`).textContent = er.message; } } }, 30); };
+  btn.addEventListener('pointerdown', start); ['pointerup', 'pointerleave', 'pointercancel', 'blur'].forEach(ev => btn.addEventListener(ev, stop));
+  btn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') start(e); }); btn.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') stop(); });
+}
+
+/* ---------- draw the area (Leaflet, bundled) ---------- */
+const AR = {mode: 'fence', fence: [], ao: [], launch: null, map: null, layers: null};
+function arInit() {
+  if (AR.map || typeof L === 'undefined') { if (typeof L === 'undefined') $('ar-tiles').textContent = 'Map library did not load.'; return; }
+  AR.map = L.map('ar-map', {zoomControl: true}).setView([1.405367, 103.950961], 16);
+  const t = (ST.map || {});
+  L.tileLayer(t.tiles || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 20, attribution: t.attribution || '&copy; OpenStreetMap contributors'})
+    .on('tileerror', () => { $('ar-tiles').textContent = 'No map tiles (offline?). Coordinates still work; set a local tile cache in the site config for field use.'; })
+    .addTo(AR.map);
+  AR.layers = L.layerGroup().addTo(AR.map);
+  AR.map.on('click', e => { const p = [+e.latlng.lat.toFixed(7), +e.latlng.lng.toFixed(7)];
+    if (AR.mode === 'launch') AR.launch = p; else AR[AR.mode].push(p); arDraw(); });
+  document.querySelectorAll('#ar-modes [data-m]').forEach(b => b.onclick = () => { AR.mode = b.dataset.m; arModes(); });
+  $('ar-undo').onclick = () => { if (AR.mode === 'launch') AR.launch = null; else AR[AR.mode].pop(); arDraw(); };
+  $('ar-clear').onclick = () => { if (AR.mode === 'launch') AR.launch = null; else AR[AR.mode] = []; arDraw(); };
+  $('ar-load').onchange = async () => { const k = $('ar-load').value; if (!k) { AR.fence = []; AR.ao = []; AR.launch = null; arDraw(); return; }
+    try { const a = await api('POST', '/api/planner/area', {kml: k}); Object.assign(AR, {fence: a.fence, ao: a.ao, launch: a.launch}); $('ar-name').value = k.split('/').pop().replace(/\.kml$/, '') + '-edit'; arDraw(true); }
+    catch (e) { $('ar-msg').textContent = e.message; } };
+  $('ar-save').onclick = async () => {
+    try { const r = await api('POST', '/api/planner/draw', {name: $('ar-name').value || 'drawn-area', fence: AR.fence, ao: AR.ao, launch: AR.launch});
+      $('ar-msg').textContent = `Saved as ${r.path}. It is selected in the planner below.`; await loadKml(r.path); arLoadList(r.path); $('pl-site').value = r.name; }
+    catch (e) { $('ar-msg').textContent = e.message; } };
+  arModes(); arDraw();
+}
+function arModes() { document.querySelectorAll('#ar-modes [data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === AR.mode)); }
+async function arLoadList(sel) { const ks = await api('GET', '/api/planner/kml'); $('ar-load').innerHTML = '<option value="">(blank)</option>' + ks.map(k => `<option value="${esc(k.path)}">${esc(k.name)}</option>`).join(''); if (sel) $('ar-load').value = sel; }
+function arInside(pt, poly) { let hit = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [yi, xi] = poly[i], [yj, xj] = poly[j];
+  if ((yi > pt[0]) !== (yj > pt[0]) && pt[1] < (xj - xi) * (pt[0] - yi) / ((yj - yi) || 1e-15) + xi) hit = !hit; } return hit; }
+function arDraw(fit) {
+  if (!AR.map) return; AR.layers.clearLayers();
+  const col = {fence: cssv('--fence'), ao: cssv('--accent')};
+  ['fence', 'ao'].forEach(k => { const pts = AR[k]; if (!pts.length) return;
+    (pts.length >= 3 ? L.polygon(pts, {color: col[k], weight: 2, dashArray: k === 'fence' ? '6 4' : null, fillOpacity: k === 'ao' ? .12 : .03}) : L.polyline(pts, {color: col[k], weight: 2})).addTo(AR.layers);
+    pts.forEach((p, i) => { const m = L.marker(p, {draggable: true, icon: L.divIcon({className: '', html: `<div class="vtx" style="background:${col[k]}"></div>`, iconSize: [12, 12], iconAnchor: [6, 6]})}).addTo(AR.layers);
+      m.on('dragend', e => { const q = e.target.getLatLng(); AR[k][i] = [+q.lat.toFixed(7), +q.lng.toFixed(7)]; arDraw(); }); }); });
+  if (AR.launch) L.marker(AR.launch, {draggable: true, title: 'launch point'}).on('dragend', e => { const q = e.target.getLatLng(); AR.launch = [+q.lat.toFixed(7), +q.lng.toFixed(7)]; arDraw(); }).addTo(AR.layers);
+  const msgs = [];
+  if (AR.fence.length < 3) msgs.push('Draw the geofence (at least 3 corners).');
+  if (AR.ao.length < 3) msgs.push('Draw the area of operation (at least 3 corners).');
+  if (AR.fence.length >= 3 && AR.ao.length >= 3 && !AR.ao.every(p => arInside(p, AR.fence))) msgs.push('The area of operation must lie inside the geofence.');
+  if (!AR.launch) msgs.push('Place the launch point.'); else if (AR.fence.length >= 3 && !arInside(AR.launch, AR.fence)) msgs.push('The launch point must be inside the geofence.');
+  $('ar-check').innerHTML = msgs.length ? msgs.map(m => `<div class="err">${esc(m)}</div>`).join('') : '<div class="e" style="color:var(--go)">Ready to save: the area is inside the fence and the launch point is placed.</div>';
+  $('ar-save').disabled = msgs.length > 0;
+  const all = [...AR.fence, ...AR.ao, ...(AR.launch ? [AR.launch] : [])];
+  if (fit && all.length) AR.map.fitBounds(L.latLngBounds(all).pad(0.15));
+}
+/* 2D / 3D switch */
+let MV3D = false;
+function mvMode(three) { MV3D = three; $('mv-2d').classList.toggle('on', !three); $('mv-3d').classList.toggle('on', three); $('mv-cv').style.display = three ? 'none' : ''; $('mv-v3').hidden = !three; $('mv-exl').hidden = !three; mvRender(); }
+function mvRender() { if (!MV3D) { mvDraw(); return; } if (window.ARTEX3D && MV) { window.ARTEX3D.render(MV, $('mv-v3'), {ex: +$('mv-ex').value}); $('mv-3dnote').textContent = 'Drag to orbit, scroll to zoom, right-drag to pan. Fence height shown = mission top + 5 m (the aircraft\'s GF_MAX_VER_DIST decides). Heights are drawn exaggerated unless you pick true scale.'; } else $('mv-3dnote').textContent = window.ARTEX3D ? 'Choose a mission.' : '3D library did not load.'; }
+$('mv-2d').onclick = () => mvMode(false); $('mv-3d').onclick = () => mvMode(true); $('mv-ex').onchange = mvRender;
+
 /* ---------- missions on the map ---------- */
 let MV = null;
 const DCOL = i => cssv(['--d1', '--d2', '--d3', '--d4'][i % 4]);
@@ -640,7 +743,7 @@ async function mvLoad(folder) {
   $('mv-tab').innerHTML = '<tr><th>Drone</th><th>Items</th><th>Top</th><th>Path</th><th>On board</th></tr>' + MV.drones.map((d, i) => `<tr><td><i class="sw" style="background:${DCOL(i)};height:4px"></i>${esc(d.name)}</td><td>${d.items}</td><td>${d.top_alt_m} m</td><td>${d.km} km</td><td>${d.onboard ? `<span class="pill GO">ARTEX${d.onboard.sysid}</span> <span class="e">${esc(d.onboard.detail)}, run ${esc(d.onboard.run)}${d.onboard.mode === 'demo' ? ' (DEMO)' : ''}</span>` : '<span class="pill NOTRUN">not uploaded yet</span>'}</td></tr>`).join('');
   $('mv-leg').innerHTML = `<span><i class="sw" style="background:var(--fence)"></i>geofence</span>${MV.ops.length ? '<span><i class="sw" style="background:var(--ops)"></i>operating area</span>' : '<span class="e">operating area: KML not recorded for this folder</span>'}<span>&#9650; home / launch</span>`
     + (MV.source ? `<span class="e">planned from ${esc(MV.source.kml)}: ${MV.source.drones} drones at ${MV.source.altitude_m} m, ${esc(MV.source.scan)}</span>` : '');
-  mvDraw();
+  mvRender();
 }
 function mvDraw() {
   const cv = $('mv-cv'), r = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight; if (!w) return;
@@ -759,36 +862,10 @@ async function fPreview() {
   $('ffModeNote').textContent = r.mode_note || '';
   $('fErr').innerHTML = r.errors.map(x => `<div class="err">${esc(x)}</div>`).join('');
   $('fCmd').textContent = r.argv ? r.argv.map(a => a.join(' ')).join('\n') : 'Fix the profile first.';
-  $('fRisks').innerHTML = r.assessment.map(i => i.level === 'block' ? `<div class="blockbox"><b>${esc(i.title)}</b><div class="e">${esc(i.text)}</div></div>` : i.level === 'accept' ? `<label class="risk chk"><input type="checkbox" class="facc" data-id="${esc(i.id)}"><span><b>${esc(i.title)}</b><div class="e">${esc(i.text)}</div></span></label>` : `<div class="note"><b>${esc(i.title)}</b><div class="e">${esc(i.text)}</div></div>`).join('');
-  $('fConfs').innerHTML = r.confirmations.length ? r.confirmations.map(c => `<label class="chk"><input type="checkbox" class="fcf" data-id="${esc(c.id)}"><span>${esc(c.text)}</span></label>`).join('') : '<div class="e">Fix the profile first.</div>';
-  const keep = {}; document.querySelectorAll('.fpil').forEach(i => keep[i.dataset.s] = i.value);
-  $('fPilots').innerHTML = r.profile.aircraft.map(a => `<label class="f"><span>Pilot holding ARTEX${a.sysid}'s handset</span><input class="fpil" data-s="${a.sysid}" value="${esc(keep[a.sysid] || '')}" autocomplete="off"></label>`).join('');
-  $('fAcNames').textContent = r.profile.aircraft.map(a => 'ARTEX' + a.sysid).join(', ');
-  $('fPhraseShow').textContent = ST.phrase;
-  document.querySelectorAll('.facc,.fcf,.fpil').forEach(x => x.addEventListener('input', fAuthState));
+  if (!FTOKEN) qaRender('fleet', r, r.profile);
   fAuthState(); fCtl();
 }
-function fAuthState() {
-  const r = FPREV, need = r && r.profile.aircraft.map(a => 'ARTEX' + a.sysid).sort().join(',');
-  const typed = $('fAcType').value.toUpperCase().split(/[\s,+]+/).filter(Boolean).sort().join(',');
-  const pil = [...document.querySelectorAll('.fpil')].map(i => i.value.trim().toLowerCase());
-  const ok = r && !r.errors.length && !r.assessment.some(i => i.level === 'block') && !fActive() && !FTOKEN
-    && [...document.querySelectorAll('.facc,.fcf')].every(c => c.checked) && pil.every(n => n.length > 1) && new Set(pil).size === pil.length
-    && $('fOp').value.trim().length > 1 && typed === need && $('fPhrase').value.trim().toUpperCase() === ST.phrase;
-  $('fAuthBtn').disabled = !ok; $('fSetup').style.opacity = fActive() ? .55 : 1;
-  $('fAuthMsg').textContent = FTOKEN || ok ? '' : 'Every box, your name, a different pilot per aircraft, the aircraft names and the words are needed.';
-}
-['fOp', 'fAcType', 'fPhrase'].forEach(id => $(id).addEventListener('input', fAuthState));
-$('fAuthBtn').onclick = async () => {
-  store('gs-operator', $('fOp').value.trim());
-  const pilots = {}; document.querySelectorAll('.fpil').forEach(i => pilots[i.dataset.s] = i.value);
-  try {
-    const r = await api('POST', '/api/fleet/authorise', {profile: FPREV.profile, operator: $('fOp').value, pilots, aircraft: $('fAcType').value, phrase: $('fPhrase').value,
-      accepted: [...document.querySelectorAll('.facc')].map(c => c.dataset.id), confirmed: [...document.querySelectorAll('.fcf')].map(c => c.dataset.id)});
-    FTOKEN = r.token; FTOKEN_AT = Date.now(); $('fAuthBox').hidden = false; fTick();
-  } catch (e) { $('fAuthMsg').textContent = e.message; }
-  fAuthState(); fCtl();
-};
+function fAuthState() { qaState('fleet'); $('fSetup').style.opacity = fActive() ? .55 : 1; }
 async function fSave(asNew) {
   const p = fRead(); if (asNew) p.name = (p.name || 'fleet') + ' copy';
   try { const r = await api('POST', '/api/fleet/profiles', p); await fLoad(); fEdLoad(r); $('fMsg').textContent = 'Saved.'; } catch (e) { $('fMsg').textContent = e.message; }
@@ -805,7 +882,7 @@ function fTick() {
   if (FTOKEN) {
     const left = Math.max(0, ST.ttl_s - (Date.now() - FTOKEN_AT) / 1000);
     if (left <= 0) { FTOKEN = null; $('fAuthBox').hidden = true; fAuthState(); fCtl(); }
-    else $('fAuthBox').innerHTML = `<b>Authorised</b> by ${esc($('fOp').value.trim())}, pilots ${[...document.querySelectorAll('.fpil')].map(i => 'ARTEX' + i.dataset.s + ' ' + esc(i.value.trim())).join(', ')}. This exact fleet profile. Expires in ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}.`;
+    else $('fAuthBox').innerHTML = `<b>Authorised</b> by ${esc(SES.operator || '')}, pilots ${Object.entries((FPREV && FPREV.session && FPREV.session.pilots) || {}).map(([k, v]) => 'ARTEX' + k + ' ' + esc(v)).join(', ')}. This exact fleet profile. Expires in ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}.`;
   }
   const w = FSNAP && FSNAP.window_s;
   $('fClock').textContent = !FSNAP ? '' : FSNAP.state === 'ready' && w != null ? (FSNAP.arm_pressed ? 'ARM ALL sent.' : `ARM ALL within ${Math.ceil(w)} s, or every agent lets go and nobody arms.`)
@@ -858,7 +935,7 @@ async function fPollOnce() {
   const feed = s.feed || []; FSNAP = Object.assign(FSNAP || {}, s); FSINCE += feed.length;
   feed.forEach(f => $('fFeed').insertAdjacentHTML('afterbegin', fLine(f)));
   fCtl(); rail();
-  if (['done', 'ended'].includes(s.state)) { fStopPoll(); fShowResult(s); FTOKEN = null; $('fAuthBox').hidden = true; $('fAcType').value = ''; $('fPhrase').value = ''; fAuthState(); fCtl(); }
+  if (['done', 'ended'].includes(s.state)) { fStopPoll(); fShowResult(s); FTOKEN = null; $('fAuthBox').hidden = true; fPreview(); fCtl(); }
 }
 function fStartPoll() { if (!fpoll) fpoll = setInterval(fPollOnce, 700); fPollOnce(); }
 function fStopPoll() { clearInterval(fpoll); fpoll = null; }
@@ -883,7 +960,6 @@ function makeHold(btn, fill, why, path, confirmWord) {
 makeHold('fArm', 'fArmFill', 'fArmWhy', '/api/fleet/arm_all', 'ARM ALL');
 makeHold('fGo', 'fGoFill', 'fGoWhy', '/api/fleet/start_all', 'START ALL');
 async function fBoot() {
-  $('fOp').value = store('gs-operator') || '';
   await fLoad(); fEdLoad(FPROFILES[0] || fBlank());
   const s = await api('GET', '/api/fleet?since=0');
   if (s.state !== 'none') { FSNAP = s; FSINCE = (s.feed || []).length; (s.feed || []).forEach(f => $('fFeed').insertAdjacentHTML('afterbegin', fLine(f))); if (fActive()) fStartPoll(); else fShowResult(s); }
@@ -900,7 +976,7 @@ async function boot() {
   $('f-acs').innerHTML = ST.aircraft.map(a => `<label class="chk" style="margin:0 10px 0 0"><input type="checkbox" class="f-ac" value="${a}"><span>ARTEX${a}</span></label>`).join('');
   document.querySelectorAll('.f-ac').forEach(c => c.addEventListener('change', edChanged));
   $('f-stage').innerHTML = ST.stages.map(([s, n]) => `<option value="${s}">${s}: ${esc(n)}</option>`).join('');
-  connectRender(); await loadProfiles(); await fBoot(); await loadKml(); await loadMissions();
+  await loadSession(); connectRender(); await loadProfiles(); await fBoot(); await loadKml(); await loadMissions();
   edLoad(PROFILES[0] || Object.assign({}, ST.defaults, {name: ''}));
   const s = await api('GET', '/api/run?since=0'); if (s.state !== 'none') { SNAP = s; SINCE = s.feed.length; s.feed.forEach(f => $('feed').insertAdjacentHTML('afterbegin', line(f))); if (running()) startPoll(); else showResult(s); }
   rail(); setInterval(tick, 1000);
@@ -908,4 +984,55 @@ async function boot() {
 }
 boot().catch(e => { document.body.insertAdjacentHTML('afterbegin', `<div class="blockbox"><b>The page could not start:</b> ${esc(e.message)}</div>`); });
 })();
-</script></body></html>
+</script>
+<script type="module">
+/* 3D mission view (three.js, bundled). Same data as the 2D map: /api/planner/mission (gs_planner.mission_view). */
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/OrbitControls.js';
+const DCOLS = ['--d1', '--d2', '--d3', '--d4'];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+let state = null;
+function teardown() { if (!state) return; cancelAnimationFrame(state.raf); state.renderer.dispose(); state.el.innerHTML = ''; state = null; }
+function render(mv, el, opts = {}) {
+  const ex = opts.ex || 1;
+  teardown();
+  const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return;
+  const pts = [...mv.fence.flat(), ...mv.ops.flat(), ...mv.drones.flatMap(d => d.points.map(p => [p[0], p[1]])), ...(mv.home && mv.home[0] != null ? [mv.home] : [])];
+  if (!pts.length) return;
+  const lat0 = pts.reduce((a, p) => a + p[0], 0) / pts.length, lon0 = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+  const k = Math.cos(lat0 * Math.PI / 180);
+  const E = (lat, lon, alt = 0) => new THREE.Vector3((lon - lon0) * 111320 * k, alt * ex, -(lat - lat0) * 111320);   // x east, y up, z south
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(css('--view'));
+  const top = Math.max(10, ...mv.drones.map(d => d.top_alt_m || 0));
+  const span = Math.max(...pts.map(p => Math.hypot((p[1] - lon0) * 111320 * k, (p[0] - lat0) * 111320)), 50);
+  const cam = new THREE.PerspectiveCamera(50, w / h, 0.5, span * 20);
+  cam.position.set(span * 0.9, span * 0.8, span * 1.2);
+  const renderer = new THREE.WebGLRenderer({antialias: true}); renderer.setPixelRatio(window.devicePixelRatio || 1); renderer.setSize(w, h); el.appendChild(renderer.domElement);
+  const controls = new OrbitControls(cam, renderer.domElement); controls.target.set(0, top * ex / 3, 0); controls.update();
+  const grid = new THREE.GridHelper(span * 2.6, 26, css('--grid'), css('--grid')); scene.add(grid);
+  const line = (vs, color, dashed) => { const g = new THREE.BufferGeometry().setFromPoints(vs);
+    const m = dashed ? new THREE.LineDashedMaterial({color, dashSize: 6, gapSize: 4}) : new THREE.LineBasicMaterial({color});
+    const l = new THREE.Line(g, m); if (dashed) l.computeLineDistances(); scene.add(l); return l; };
+  const fenceTop = (top + 5) * ex;
+  mv.fence.forEach(f => { const ring = f.map(p => E(p[0], p[1])); ring.push(ring[0]);
+    line(ring, css('--fence'), true); line(ring.map(v => v.clone().setY(fenceTop)), css('--fence'), true);
+    ring.slice(0, -1).forEach(v => line([v, v.clone().setY(fenceTop)], css('--fence'), true));
+    const shape = new THREE.Shape(f.map(p => { const v = E(p[0], p[1]); return new THREE.Vector2(v.x, -v.z); }));
+    const walls = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, {depth: fenceTop, bevelEnabled: false}),
+      new THREE.MeshBasicMaterial({color: css('--fence'), transparent: true, opacity: 0.06, side: THREE.DoubleSide, depthWrite: false}));
+    walls.rotation.x = -Math.PI / 2; scene.add(walls); });
+  mv.ops.forEach(o => { const shape = new THREE.Shape(o.map(p => { const v = E(p[0], p[1]); return new THREE.Vector2(v.x, -v.z); }));
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({color: css('--ops'), transparent: true, opacity: 0.18, side: THREE.DoubleSide}));
+    m.rotation.x = -Math.PI / 2; m.position.y = 0.05; scene.add(m); });
+  mv.drones.forEach((d, i) => { const c = css(DCOLS[i % 4]);
+    const vs = []; let prev = null;
+    d.points.forEach((p, j) => { if (j === 0 && mv.home && mv.home[0] != null) vs.push(E(mv.home[0], mv.home[1], 0)); vs.push(E(p[0], p[1], p[2] || 0)); });
+    line(vs, c);
+    d.points.forEach(p => { if ((p[2] || 0) > 0.5) { const s = new THREE.Mesh(new THREE.SphereGeometry(span / 220 + 0.4), new THREE.MeshBasicMaterial({color: c})); s.position.copy(E(p[0], p[1], p[2])); scene.add(s); } }); });
+  if (mv.home && mv.home[0] != null) { const cone = new THREE.Mesh(new THREE.ConeGeometry(span / 90 + 1, span / 45 + 2, 4), new THREE.MeshBasicMaterial({color: css('--ink')})); cone.position.copy(E(mv.home[0], mv.home[1], span / 90 + 1)); scene.add(cone); }
+  const loop = () => { controls.update(); renderer.render(scene, cam); state.raf = requestAnimationFrame(loop); };
+  state = {renderer, el, raf: 0}; loop();
+}
+window.ARTEX3D = {render, teardown};
+</script>
+</body></html>

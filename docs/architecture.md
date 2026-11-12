@@ -21,6 +21,20 @@
 ## Before release
 - Real-flight evidence: radio Offboard is props-off bench only; fleet missions never flown; outdoor parameter configuration.
 - Lean outdoor downlink profile for missions.
-- Simplified authorisation, drawn areas, 3D view (Phase A2).
 - Assistant with evals (Phases B, C).
 - Installers (.deb, offline Jetson bundle), accounts and roles, signing; safety case; licence.
+
+## Phase A2 (done, 12 Nov 2026)
+- **Quick authorisation:** sign in once (operator + PIN, salted PBKDF2 in `operators.json`, 5 wrong PINs lock a name
+  for a minute); name one pilot per aircraft; accept each profile's risks once per session (keyed by the profile hash,
+  so an edited profile asks again). Per run: one confirmation tick + press-and-hold -> the same run token as before
+  (`/api/run/authorise_quick`, `/api/fleet/authorise_quick`). BLOCKs and the fresh per-run confirmation remain.
+  The full form endpoints still exist for API clients. Delegation to the assistant is shown but disabled (Phase C).
+- **Draw the area:** Leaflet (bundled, `static/vendor/`) on OpenStreetMap tiles by default (`ARTEX_TILES` to point at
+  the customer's tile server or an offline cache; OSM's public tiles are not for commercial heavy use). GeoFence,
+  area of operation, launch point; drag corners; checked live (AO and launch inside the fence, no crossing edges) and
+  again on the server; saved as a KML under `ops/` that plans identically to the same area imported.
+  No-go zones: draw the AO around them (a notch); separate no-go polygons are not supported by the planner yet.
+- **3D view:** three.js (bundled) on the same data as the 2D map: fence as a box (height = mission top + 5 m, the
+  aircraft's GF_MAX_VER_DIST decides), AO, each drone's path at its altitude layer, launch point; heights exaggerated
+  x3 by default (x1 / x10 selectable, labelled).

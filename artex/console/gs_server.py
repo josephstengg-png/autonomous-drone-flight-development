@@ -32,11 +32,15 @@ from urllib.parse import parse_qs, urlparse
 from artex.console import gs_core as core  # noqa: E402
 from artex.console import gs_fleet as fleet  # noqa: E402
 from artex.planner import gs_planner as planner  # noqa: E402
+from artex.console import sessions  # noqa: E402
 from artex.fleetops.swarm_deploy import host_argv, push as push_plan  # noqa: E402
 from artex.common import layout, version  # noqa: E402
 
 ROOT = core.ROOT
-GUI = Path(__file__).resolve().parent / "static" / "index.html"
+STATIC = Path(__file__).resolve().parent / "static"
+GUI = STATIC / "index.html"
+MIME = {".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml",
+        ".json": "application/json", ".html": "text/html", ".txt": "text/plain"}
 GATE_S = 150          # drone_agent --gate-timeout-s: how long READY waits for the operator's ARM
 SEND_WORDS = {"ARM", "ABORT", "LAND", "HOLD"}
 DEMO_WORDS = {"DEMO_TAKEOVER", "DEMO_KILL"}
@@ -620,6 +624,40 @@ class App:
         self.fleet: FleetRun | None = None
         self.pre: dict[int, dict] = {}
         self.lock = threading.Lock()
+        self.sessions = sessions.Sessions()
+        self.pin_fails: dict[str, list[float]] = {}
+
+    def quick_authorise(self, kind: str, p: dict, s: dict, body: dict) -> tuple[int, dict]:
+        """Session + one confirmation + the GUI's press-and-hold -> the same run token the full form issues."""
+        if kind == "fleet":
+            sysids = [m["sysid"] for m in p["aircraft"]]
+            items = fleet.assess(p, {x: self.ctx(x) for x in sysids})
+            confs = fleet.confirmations(p) if not fleet.validate(p) else []
+        else:
+            sysids = p["sysids"]
+            items = core.assess(p, self.ctx(p["sysid"]))
+            confs = core.confirmations(p) if p["sysid"] in core.AIRCRAFT else []
+        blocks = [i for i in items if i["level"] == "block"]
+        if blocks:
+            return 403, dict(error="Blocked: " + "; ".join(i["title"] for i in blocks), blocks=blocks)
+        need = {i["id"] for i in items if i["level"] == "accept"}
+        h = core.profile_hash(p)
+        missing = sessions.Sessions.missing_acceptance(s, h, need)
+        if missing:
+            return 409, dict(error="Accept this profile's risks for the session first.", need_accept=missing)
+        no_pilot = sessions.Sessions.missing_pilots(s, sysids)
+        if no_pilot:
+            return 409, dict(error="Name a pilot for " + ", ".join(f"ARTEX{x}" for x in no_pilot) + " (Connect page, crew).",
+                             need_pilots=no_pilot)
+        if body.get("confirm") != "AUTHORISE":
+            return 403, dict(error="Tick the confirmation and press and hold Authorise.")
+        if body.get("delegate"):
+            return 403, dict(error="Delegating the gates to the assistant arrives in Phase C; authorise and fly the gates yourself.")
+        rec = dict(operator=s["operator"], pilots={str(x): s["pilots"][str(x)] for x in sysids}, accepted=sorted(need),
+                   confirmations=[c["text"] for c in confs], phrase="quick authorisation: signed-in operator, one "
+                   "confirmation, press-and-hold", aircraft_typed=", ".join(f"ARTEX{x}" for x in sysids),
+                   authorised=time.strftime("%Y-%m-%d %H:%M:%S"), quick=True, delegate=False)
+        return 200, dict(token=self.tokens.issue(p, s["operator"], rec), ttl_s=core.TOKEN_TTL_S)
 
     def busy(self) -> bool:
         return bool((self.run and self.run.active) or (self.fleet and self.fleet.active))
@@ -700,7 +738,7 @@ def make_handler(app: App):
             data = body if isinstance(body, bytes) else (json.dumps(body, default=str) if ctype == "application/json"
                                                           else body).encode()
             self.send_response(code)
-            self.send_header("Content-Type", ctype + ("; charset=utf-8" if ctype != "application/json" else ""))
+            self.send_header("Content-Type", ctype + ("; charset=utf-8" if ctype.startswith("text/") or ctype.endswith("javascript") else ""))
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
@@ -737,6 +775,12 @@ def make_handler(app: App):
             q = parse_qs(u.query)
             if u.path in ("/", "/index.html"):
                 return self._send(200, GUI.read_bytes(), "text/html")
+            if u.path.startswith("/static/"):
+                # bundled libraries (Leaflet, three.js) so the console works with no internet in the field
+                f = (STATIC / u.path[len("/static/"):]).resolve()
+                if STATIC not in f.parents or not f.is_file() or f.suffix not in MIME:
+                    return self._send(404, dict(error="not found"))
+                return self._send(200, f.read_bytes(), MIME[f.suffix])
             if u.path == "/api/state":
                 return self._send(200, dict(demo=app.demo, phrase=core.PHRASE, aircraft=sorted(core.AIRCRAFT),
                                             stages=[[s, core.STAGE_NOTE[s]] for s in core.STAGES],
@@ -745,6 +789,9 @@ def make_handler(app: App):
                                                                report=v["report"]) for k, v in app.pre.items()},
                                             run_active=bool(app.run and app.run.active),
                                             fleet_active=bool(app.fleet and app.fleet.active),
+                                            map=dict(tiles=os.environ.get("ARTEX_TILES", "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+                                                     attribution=os.environ.get("ARTEX_TILES_ATTRIBUTION",
+                                                                                "&copy; OpenStreetMap contributors")),
                                             fleet=dict(modes=[[k, fleet.MODE_NOTE[k]] for k in fleet.MODES],
                                                        defaults=fleet.DEFAULTS, start_window_s=fleet.START_WINDOW_S,
                                                        ready_gate_s=fleet.READY_GATE_S),
@@ -772,6 +819,10 @@ def make_handler(app: App):
                 if not app.fleet:
                     return self._send(200, dict(state="none", kind="fleet"))
                 return self._send(200, app.fleet.snapshot(int(q.get("since", ["0"])[0])))
+            if u.path == "/api/session":
+                ses = app.sessions.get(self.headers.get("X-GS-Session"))
+                return self._send(200, dict(signed_in=bool(ses), has_operators=sessions.has_operators(),
+                                            operator=ses and ses["operator"], pilots=ses and ses["pilots"]))
             if u.path == "/api/version":
                 return self._send(200, dict(version.report(), demo=app.demo, remote_dir=layout.REMOTE_DIR))
             if u.path == "/api/runs":
@@ -800,6 +851,7 @@ def make_handler(app: App):
             if path == "/api/profiles/preview":
                 p = core.normalise(b)
                 return self._send(200, dict(profile=p, errors=core.validate(p),
+                                            session=self._session_view(p, core.assess(p, app.ctx(p["sysid"])), p["sysids"]),
                                             timeline=core.timeline(p) if not core.validate(p) else None,
                                             assessment=core.assess(p, app.ctx(p["sysid"])),
                                             confirmations=core.confirmations(p) if p["sysid"] in core.AIRCRAFT else [],
@@ -818,10 +870,25 @@ def make_handler(app: App):
                            phrase=core.PHRASE, aircraft_typed=b["aircraft"].strip().upper(),
                            authorised=time.strftime("%Y-%m-%d %H:%M:%S"))
                 return self._send(200, dict(token=app.tokens.issue(p, b["operator"], rec), ttl_s=core.TOKEN_TTL_S))
+            if path.startswith("/api/session"):
+                return self._session(path, b)
+            if path in ("/api/run/authorise_quick", "/api/fleet/authorise_quick"):
+                ses = app.sessions.get(self.headers.get("X-GS-Session"))
+                if not ses:
+                    return self._send(401, dict(error="Sign in first (Connect page)."))
+                kind = "fleet" if path.startswith("/api/fleet") else "single"
+                prof = fleet.normalise(b["profile"]) if kind == "fleet" else core.normalise(b["profile"])
+                code, out = app.quick_authorise(kind, prof, ses, b)
+                return self._send(code, out)
             if path.startswith("/api/fleet"):
                 return self._fleet(path, b)
             if path == "/api/planner/upload":
                 return self._send(200, planner.save_kml(str(b.get("name", "")), str(b.get("text", ""))))
+            if path == "/api/planner/draw":
+                return self._send(200, planner.save_drawing(str(b.get("name", "")), b.get("fence") or [],
+                                                            b.get("ao") or [], b.get("launch")))
+            if path == "/api/planner/area":
+                return self._send(200, planner.read_area(str(b.get("kml", ""))))
             if path == "/api/planner/run":
                 return self._send(200, planner.run_planner(str(b.get("kml", "")), str(b.get("site", "")),
                                                            int(b.get("drones", 0)), float(b.get("altitude", "nan")),
@@ -872,6 +939,56 @@ def make_handler(app: App):
                 return self._send(200, app.abort_out_of_band(sysid))
             self._send(404, dict(error="not found"))
 
+        def _session_view(self, p: dict, items: list[dict], sysids: list[int]) -> dict:
+            """For the quick authorisation panel: is the session ready for THIS profile?"""
+            ses = app.sessions.get(self.headers.get("X-GS-Session"))
+            if not ses:
+                return dict(signed_in=False)
+            need = {i["id"] for i in items if i["level"] == "accept"}
+            return dict(signed_in=True, operator=ses["operator"],
+                        missing_accept=sessions.Sessions.missing_acceptance(ses, core.profile_hash(p), need),
+                        missing_pilots=sessions.Sessions.missing_pilots(ses, sysids),
+                        pilots={str(x): ses["pilots"].get(str(x)) for x in sysids})
+
+        def _session(self, path: str, b: dict):
+            tok = self.headers.get("X-GS-Session")
+            ses = app.sessions.get(tok)
+            if path == "/api/session/first_operator":
+                if sessions.has_operators():
+                    return self._send(403, dict(error="Operators exist already: sign in."))
+                sessions.add_operator(str(b.get("name", "")), str(b.get("pin", "")))
+                return self._send(200, dict(token=app.sessions.open(str(b["name"]).strip())))
+            if path == "/api/session/signin":
+                name = str(b.get("name", "")).strip().lower()
+                fails = [t for t in app.pin_fails.get(name, []) if time.time() - t < 60]
+                if len(fails) >= 5:
+                    return self._send(429, dict(error="Too many wrong PINs: wait a minute."))
+                who = sessions.check_pin(str(b.get("name", "")), str(b.get("pin", "")))
+                if not who:
+                    app.pin_fails[name] = fails + [time.time()]
+                    return self._send(403, dict(error="Name or PIN not recognised."))
+                app.pin_fails.pop(name, None)
+                return self._send(200, dict(token=app.sessions.open(who)))
+            if not ses:
+                return self._send(401, dict(error="Sign in first."))
+            if path == "/api/session/signout":
+                app.sessions.close(tok)
+                return self._send(200, dict(ok=True))
+            if path == "/api/session/add_operator":
+                sessions.add_operator(str(b.get("name", "")), str(b.get("pin", "")))
+                return self._send(200, dict(ok=True))
+            if path == "/api/session/crew":
+                return self._send(200, dict(pilots=sessions.Sessions.set_crew(ses, b.get("pilots") or {})))
+            if path == "/api/session/accept":
+                kind = str(b.get("kind", "single"))
+                prof = fleet.normalise(b["profile"]) if kind == "fleet" else core.normalise(b["profile"])
+                items = (fleet.assess(prof, {m["sysid"]: app.ctx(m["sysid"]) for m in prof["aircraft"]}) if kind == "fleet"
+                         else core.assess(prof, app.ctx(prof["sysid"])))
+                ids = [i["id"] for i in items if i["level"] == "accept"]
+                sessions.Sessions.accept(ses, core.profile_hash(prof), ids)
+                return self._send(200, dict(accepted=ids))
+            self._send(404, dict(error="not found"))
+
         def _fleet(self, path: str, b: dict):
             ctx = lambda p: {m["sysid"]: app.ctx(m["sysid"]) for m in p["aircraft"]}  # noqa: E731
             if path == "/api/fleet/profiles":
@@ -882,6 +999,8 @@ def make_handler(app: App):
                 p = fleet.normalise(b)
                 errs = fleet.validate(p)
                 return self._send(200, dict(profile=p, errors=errs, assessment=fleet.assess(p, ctx(p)),
+                                            session=self._session_view(p, fleet.assess(p, ctx(p)),
+                                                                       [m["sysid"] for m in p["aircraft"]]),
                                             confirmations=fleet.confirmations(p) if not errs else [],
                                             plans={m["plan"]: fleet.plan_summary(m["plan"]) for m in p["aircraft"]
                                                    if fleet.plan_ok(m["plan"])},
