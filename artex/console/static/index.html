@@ -636,6 +636,7 @@ $('asAsk').onclick = async () => {
       + (r.proposals || []).map((pr, i) => `<div class="note"><b>Draft: ${esc(pr.proposal.replace('_', ' '))}</b>${(pr.errors || []).length ? `<div class="err">${pr.errors.map(esc).join('<br>')}</div>` : ''}<div class="e">${esc(pr.note || '')}</div><div class="bar"><button class="btn solid" data-pi="${i}" type="button">Apply to the form</button></div></div>`).join('')
       + (r.calls.length ? `<details><summary class="e">What it looked at (${r.calls.length})</summary><ul class="log">${r.calls.map(c => `<li class="${c.refused ? 'bad' : 'ev'}">${esc(c.tool)}(${esc(JSON.stringify(c.arguments))})${c.refused ? ' — ' + esc(c.refused) : ''}</li>`).join('')}</ul></details>` : '');
     $('asOut').querySelectorAll('[data-pi]').forEach(b => b.onclick = () => asApply(r.proposals[+b.dataset.pi]));
+    if ((r.calls || []).some(c => !c.refused && ['execute_authorised_run', 'stop_aircraft'].includes(c.tool))) { fStartPoll(); startPoll(); }   // a run the assistant started or stopped: follow it on the pages
   } catch (e) { $('asMsg').textContent = e.message; }
   $('asAsk').disabled = false;
 };
@@ -989,7 +990,7 @@ $('fFlag').onclick = async () => { if (!confirm('Set the out-of-band ABORT flag 
 function fCtl() {
   const s = FSNAP, st = s ? s.state : 'none', act = fActive(), mission = s && s.profile && s.profile.mode === 'mission';
   $('fStart').disabled = !FTOKEN || act || (ST.run_active) ; $('fStartMsg').textContent = act ? 'A fleet run is active.' : FTOKEN ? '' : 'Authorise the fleet run first.';
-  const canArm = act && st === 'ready' && FTOKEN && !s.arm_pressed, canGo = act && st === 'armed' && mission && FTOKEN && !s.start_pressed;
+  const canArm = act && st === 'ready' && FTOKEN && !s.arm_pressed && s.profile && s.profile.mode !== 'upload', canGo = act && st === 'armed' && mission && FTOKEN && !s.start_pressed;
   $('fArm').disabled = !canArm; $('fGo').disabled = !canGo;
   $('fArmWhy').textContent = canArm ? 'Press and hold 1.2 s. Every aircraft arms at one instant.' : st === 'preparing' ? 'Preparing…' : st === 'not_ready' ? 'Not every aircraft is READY' : ['arming', 'armed', 'launching', 'flying', 'fault'].includes(st) ? 'Sent' : st === 'ready' && !FTOKEN ? 'Authorisation expired' : 'Prepare first';
   $('fGoWhy').textContent = canGo ? 'Press and hold 1.2 s. Every aircraft starts its mission.' : s && s.profile && s.profile.mode !== 'mission' ? 'Not a mission run' : ['launching', 'flying', 'fault'].includes(st) ? 'Sent' : 'Arm all first';

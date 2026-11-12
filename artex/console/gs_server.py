@@ -728,6 +728,8 @@ class App:
         if not fr or not fr.active:
             return 409, dict(error="No active fleet run.")
         arm = which == "arm"
+        if fr.p["mode"] == "upload":
+            return 409, dict(error="An upload-and-verify run has no gates: nothing is ever armed.")
         if (arm and fr.state != "ready") or (not arm and (fr.state != "armed" or fr.p["mode"] != "mission")):
             return 409, dict(error="Not at that gate." if arm else "Not every aircraft is armed, or this is not a mission run.")
         tok = self.tokens.get(token, fr.p)

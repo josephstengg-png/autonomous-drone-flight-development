@@ -185,3 +185,13 @@ def test_the_model_is_told_whether_it_holds_a_delegation(app):
     agent.ask("fly it", llm=Spy(), phase="C", extra_tools=actions.tools_for(app, None), act_ok=False)
     assert "Delegation: VALID" in " ".join(m["content"] for m in seen[0]) and "Seletar pair" in " ".join(m["content"] for m in seen[0])
     assert "Delegation: NONE" in " ".join(m["content"] for m in seen[1])
+
+
+def test_an_upload_run_has_no_gates_for_the_operator_or_the_assistant(app):
+    up = dict(MISSION, name="Seletar upload", mode="upload", flight_type="bench")
+    tok = authorise(app, "fleet", up)
+    say(app, tok, [[("execute_authorised_run", {})], "Started."])
+    assert app.fleet.p["mode"] == "upload"
+    assert app.fleet_gate("arm", tok, "ARM ALL")[0] == 409
+    assert until(lambda: not app.fleet.active, 40)
+    assert not any("ARM ALL" in x["text"] for x in app.fleet.rec.get("assistant_actions", []))

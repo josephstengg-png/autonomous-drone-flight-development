@@ -58,6 +58,8 @@ def _wait(cond, timeout_s: float, step: float = 0.2) -> bool:
 
 def _sequence_fleet(app, token: str) -> None:
     fr = app.fleet
+    if fr.p["mode"] == "upload":
+        return                      # upload and verify: no gates, nothing to press
     if not _wait(lambda: fr.state in ("ready", "not_ready", "done", "ended"), 300):
         return _log(app, "gave up waiting for READY", bad=True)
     if fr.state != "ready":
