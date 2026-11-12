@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from artex.common.layout import ROOT
+from artex.common.layout import DATA, ROOT
 from artex.console import gs_core as core
 from artex.console import gs_fleet as fleet
 from artex.planner import gs_planner as planner
@@ -20,7 +20,11 @@ MAX_RESULT_CHARS = 3500
 
 def _docs_store() -> TemplateStore:
     chunks = []
-    for p in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]:
+    seen = set()
+    for p in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md")), DATA / "README.md", *sorted((DATA / "docs").glob("*.md"))]:
+        if p.name in seen:
+            continue
+        seen.add(p.name)
         if p.exists():
             chunks.extend(_split_sections(p))
     return TemplateStore(chunks)

@@ -3,6 +3,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+build/
 runs/
 missions/*/
 !missions/seletar/
@@ -14,3 +15,5 @@ profiles/deleted/
 profiles/fleet/deleted/
 .pytest_cache/
 operators.json
+artex/starter/docs/
+artex/starter/README.md

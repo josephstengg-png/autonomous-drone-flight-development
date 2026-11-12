@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Bedok Reservoir - SAR sector</name>
+  <description>APPROXIMATE. The reservoir outline is drawn from its rough position and shape,
+  not surveyed or traced from imagery; the GeoFence is an arbitrary polygon around it. Good
+  enough to exercise the planner, not to brief a real sortie. A real flight here would also
+  need CAAS clearance - this is inside Singapore and close to Paya Lebar Air Base.</description>
+  <Placemark>
+    <name>GCSlocation</name>
+    <description>Staging point on the south bank, Bedok Reservoir Park</description>
+    <Point><coordinates>103.93042173,1.33655927,0</coordinates></Point>
+  </Placemark>
+  <Placemark>
+    <name>GeoFence</name>
+    <description>Hard boundary - no waypoint or leg may leave this</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>
+      103.94008082,1.34266740,0
+      103.93722321,1.34687540,0
+      103.93146935,1.34841964,0
+      103.92480311,1.34684737,0
+      103.92247661,1.34158291,0
+      103.92735080,1.33575226,0
+      103.93087833,1.33426335,0
+      103.93722073,1.33628926,0
+      103.94008082,1.34266740,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon>
+  </Placemark>
+  <Placemark>
+    <name>OpsArea</name>
+    <description>The water itself - search area is the reservoir surface</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>
+      103.93682998,1.34075113,0
+      103.93691283,1.34180034,0
+      103.93690502,1.34309956,0
+      103.93544142,1.34428335,0
+      103.93305591,1.34468999,0
+      103.93091203,1.34483551,0
+      103.92870158,1.34498410,0
+      103.92678167,1.34450390,0
+      103.92574219,1.34350191,0
+      103.92527807,1.34237420,0
+      103.92580526,1.34118402,0
+      103.92720737,1.34022965,0
+      103.92833367,1.33926401,0
+      103.92977980,1.33797316,0
+      103.93223686,1.33731987,0
+      103.93445726,1.33781815,0
+      103.93588954,1.33870542,0
+      103.93672955,1.33968176,0
+      103.93682998,1.34075113,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon>
+  </Placemark>
+</Document>
+</kml>

@@ -23,7 +23,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from artex.common.layout import DATA as ROOT  # noqa: E402  (the data root: the checkout, or ARTEX_HOME)
 from artex.agent import offboard_control as oc  # noqa: E402
 from artex.common import layout  # noqa: E402
 
@@ -54,6 +54,24 @@ AIRCRAFT = {113: dict(host="jetson-2", radio="udpout://127.0.0.1:14540", usb="se
                       fleet="fleet-artex113.yaml", hover=0.42),
             115: dict(host="jetson-1", radio="udpout://127.0.0.1:14540", usb="serial:/dev/ttyACM0",
                       fleet="fleet-artex115.yaml", hover=0.42)}
+
+
+def _site_aircraft() -> None:
+    """A customer's aircraft come from aircraft.yaml in the data root (template: site-examples/aircraft.example.yaml);
+    without one, the two ARTEX lab aircraft above."""
+    f = ROOT / "aircraft.yaml"
+    if not f.exists():
+        return
+    import yaml
+    spec = yaml.safe_load(f.read_text()) or {}
+    loaded = {int(k): dict(dict(radio="udpout://127.0.0.1:14540", usb="serial:/dev/ttyACM0", hover=0.42), **v)
+              for k, v in (spec.get("aircraft") or {}).items()}
+    if loaded:
+        AIRCRAFT.clear()
+        AIRCRAFT.update(loaded)
+
+
+_site_aircraft()
 
 DEFAULTS = dict(name="", description="", sysid=113, link="radio", flight_type="bench", stage="takeoff",
                 height_m=0.8, hold_s=5.0, wait_s=15.0, takeoff_pause_m=0.5,

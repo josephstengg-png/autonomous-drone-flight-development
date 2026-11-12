@@ -28,13 +28,15 @@ SCANS = ("lawnmower", "voronoi")
 
 
 def python() -> str:
-    venv = core.ROOT / ".venv" / "bin" / "python"
+    from artex.common.layout import ROOT as code_root
+    venv = code_root / ".venv" / "bin" / "python"
     return str(venv) if venv.exists() else sys.executable
 
 
 def _env() -> dict:
     import os
-    return {**os.environ, "PYTHONPATH": str(core.ROOT)}
+    from artex.common.layout import ROOT as code_root
+    return {**os.environ, "PYTHONPATH": str(code_root)}
 
 
 def kml_summary(path: Path) -> dict:
@@ -120,7 +122,10 @@ def run_planner(kml: str, site: str, n: int, altitude: float, overlap: float, sc
         return dict(ok=False, error=" ".join(errs))
     folder = _free(MISSIONS_DIR / f"{core.slug(site) or core.slug(Path(kml).stem)}-{time.strftime('%Y-%m-%d')}")
     folder.mkdir(parents=True)
-    cfg = dict(json.loads((core.ROOT / "config.example.json").read_text()),
+    base = core.ROOT / "config.example.json"
+    if not base.exists():
+        base = Path(__file__).resolve().parents[1] / "starter" / "config.example.json"
+    cfg = dict(json.loads(base.read_text()),
                number_of_drones=n, scan_altitude_m=altitude, scan_overlap_percent=overlap, scan_type=scan)
     cfg.setdefault("ollama", {})["enabled"] = False
     (folder / "config.json").write_text(json.dumps(cfg, indent=2) + "\n")

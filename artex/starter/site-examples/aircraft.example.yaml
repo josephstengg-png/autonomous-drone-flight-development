@@ -1,0 +1,17 @@
+# Your aircraft. Copy to aircraft.yaml in the data root (ARTEX_HOME, default ~/.local/share/artex) and edit.
+# Without aircraft.yaml the console uses the two ARTEX lab aircraft (113 on jetson-2, 115 on jetson-1).
+#   host:   the ssh name of the companion (Jetson) that holds this aircraft's link (see companions.yaml / ~/.ssh/config)
+#   radio:  how the agent on the companion reaches the flight controller over the radio relay
+#   usb:    the flight controller on the companion's USB, for bench work and log pulls
+#   fleet:  the one-aircraft fleet file preflight and the out-of-band abort use
+#   hover:  hover thrust (0..1), from PX4's MPC_THR_HOVER
+aircraft:
+  113:
+    host: jetson-2
+    radio: udpout://127.0.0.1:14540
+    usb: serial:/dev/ttyACM0
+    fleet: fleet-artex113.yaml
+    hover: 0.42
+  115:
+    host: jetson-1
+    fleet: fleet-artex115.yaml

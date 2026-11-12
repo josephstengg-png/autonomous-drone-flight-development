@@ -11,7 +11,7 @@ Extra stdin words: DEMO_TAKEOVER (the pilot drops ch5), DEMO_KILL (the pilot hol
 """
 import sys as _sys
 from pathlib import Path as _Path
-_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))   # the app root, for `artex`
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))   # the code root, for `artex`
 
 import argparse
 import json

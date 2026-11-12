@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=ARTEX Ground Station
+Comment=Search-and-rescue mission planning and fleet console
+Exec=sh -c "artex-console & sleep 1; xdg-open http://127.0.0.1:8787"
+Terminal=false
+Categories=Utility;

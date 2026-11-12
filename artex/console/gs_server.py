@@ -40,6 +40,7 @@ from artex.fleetops.swarm_deploy import host_argv, push as push_plan  # noqa: E4
 from artex.common import layout, version  # noqa: E402
 
 ROOT = core.ROOT
+DEMO = Path(__file__).resolve().parents[1] / "demo"      # simulated agents, shipped inside the package
 STATIC = Path(__file__).resolve().parent / "static"
 GUI = STATIC / "index.html"
 MIME = {".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml",
@@ -69,7 +70,7 @@ class Run:
 
     def start(self) -> None:
         if self.demo:
-            cmd = [sys.executable, str(ROOT / "demo" / "fake_agent.py")] + self.argv[len(layout.AGENT):]
+            cmd = [sys.executable, str(DEMO / "fake_agent.py")] + self.argv[len(layout.AGENT):]
         else:
             ac = core.AIRCRAFT[self.rec["profile"]["sysid"]]
             cmd, _ = host_argv(dict(host=ac["host"], remote_dir=layout.REMOTE_DIR), self.argv)
@@ -296,7 +297,7 @@ class Member:
 
     def start(self, demo: bool) -> None:
         if demo:
-            cmd = [sys.executable, str(ROOT / "demo" / "fake_resident_agent.py")] + self.argv[len(layout.AGENT):]
+            cmd = [sys.executable, str(DEMO / "fake_resident_agent.py")] + self.argv[len(layout.AGENT):]
         else:
             cmd, _ = host_argv(dict(host=core.AIRCRAFT[self.sysid]["host"], remote_dir=layout.REMOTE_DIR), self.argv)
             cmd[1:1] = ["-o", "ConnectTimeout=8"]
@@ -1148,6 +1149,7 @@ def main() -> int:
     ap.add_argument("--no-signin", action="store_true",
                     help="lab use only: do not require a signed-in operator for actions (roles not enforced)")
     a = ap.parse_args()
+    layout.ensure_data()
     app = App(a.demo, require_signin=not a.no_signin)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(app))
     print(f"[gs] {'DEMO (simulated aircraft)' if a.demo else 'LIVE (real aircraft over ssh)'} -- "

@@ -17,9 +17,9 @@ import secrets
 import time
 from pathlib import Path
 
-from artex.common.layout import ROOT
+from artex.common.layout import DATA
 
-OPERATORS_FILE = ROOT / "operators.json"
+OPERATORS_FILE = DATA / "operators.json"
 SESSION_TTL_S = 12 * 3600
 ROLES = ("observer", "operator", "admin")            # each includes the ones before it
 ROLE_RANK = {r: i for i, r in enumerate(ROLES)}

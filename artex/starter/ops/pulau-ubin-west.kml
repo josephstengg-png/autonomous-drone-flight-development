@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Pulau Ubin West - SAR sector</name>
+  <Placemark>
+    <name>GCSlocation</name>
+    <description>Staging point, track junction near Ketam Quarry</description>
+    <Point><coordinates>103.95096085,1.40536694,0</coordinates></Point>
+  </Placemark>
+  <Placemark>
+    <name>GeoFence</name>
+    <description>Hard boundary - no waypoint or leg may leave this</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>
+      103.95024199,1.40473388,0 103.95779007,1.40428169,0 103.95940752,1.40762787,0 103.95779007,1.41142623,0 103.95284787,1.41178798,0 103.94979269,1.40871312,0 103.95024199,1.40473388,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon>
+  </Placemark>
+  <Placemark>
+    <name>OpsArea</name>
+    <description>L-shaped search sector following the trail bend</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>
+      103.95150000,1.40600000,0 103.95689149,1.40600000,0 103.95689149,1.40780874,0 103.95374645,1.40780874,0 103.95374645,1.41006967,0 103.95150000,1.41006967,0 103.95150000,1.40600000,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon>
+  </Placemark>
+</Document>
+</kml>
