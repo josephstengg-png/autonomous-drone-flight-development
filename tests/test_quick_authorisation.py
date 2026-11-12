@@ -81,7 +81,8 @@ def test_quick_authorisation_needs_a_session_pilots_and_one_confirmation(gs):
     assert gs("POST", "/api/session/crew", dict(pilots={"113": "Ann", "115": "ann"}))[0] == 400     # same person twice
     gs("POST", "/api/session/crew", dict(pilots={"113": "Ann", "115": "Ben"}))
     assert gs("POST", "/api/run/authorise_quick", dict(profile=BENCH))[0] == 403                    # no confirmation
-    assert "Phase C" in gs("POST", "/api/run/authorise_quick", dict(profile=BENCH, confirm="AUTHORISE", delegate=True))[1]["error"]
+    d = gs("POST", "/api/run/authorise_quick", dict(profile=BENCH, confirm="AUTHORISE", delegate=True))
+    assert d[0] == 200 and d[1]["delegated"] and gs.app.delegations[d[1]["token"]]["operator"] == "Joseph"   # DEMO allows it
     s, r = gs("POST", "/api/run/authorise_quick", dict(profile=BENCH, confirm="AUTHORISE"))
     assert s == 200 and r["token"]
     tok = gs.app.tokens.get(r["token"], core.normalise(BENCH))
@@ -108,3 +109,16 @@ def test_a_block_cannot_be_authorised_away(gs):
     props_on_radio = dict(name="Hover radio", sysid=113, flight_type="tether", link="radio", stage="disarm")
     s, r = gs("POST", "/api/run/authorise_quick", dict(profile=props_on_radio, confirm="AUTHORISE"))
     assert s == 403 and "Preflight" in r["error"]
+
+
+def test_delegation_is_refused_for_real_aircraft_unless_the_site_switches_it_on(monkeypatch):
+    app = srv.App(demo=False)
+    ses = app.sessions.get(app.sessions.open("Joseph"))
+    sessions.Sessions.set_crew(ses, {"113": "Ann", "115": "Ben"})
+    p = core.normalise(BENCH)
+    monkeypatch.delenv("ARTEX_ASSISTANT_LIVE", raising=False)
+    code, out = app.quick_authorise("single", p, ses, dict(confirm="AUTHORISE", delegate=True))
+    assert code == 403 and "switched off for real aircraft" in out["error"] and not app.delegations
+    monkeypatch.setenv("ARTEX_ASSISTANT_LIVE", "enabled")
+    code, out = app.quick_authorise("single", p, ses, dict(confirm="AUTHORISE", delegate=True))
+    assert code == 200 and out["delegated"]

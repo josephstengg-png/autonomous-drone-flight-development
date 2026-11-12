@@ -1,7 +1,7 @@
 """The language model behind the assistant: a local Qwen3-4B served by Ollama (Apache-2.0, runs offline).
 
     ARTEX_LLM_URL    default http://127.0.0.1:11434
-    ARTEX_LLM_MODEL  default qwen3:4b
+    ARTEX_LLM_MODEL  default qwen3:4b-instruct (Qwen3-4B-Instruct-2507)
 
 Only Ollama's /api/chat with tool calling is used. Any other backend (llama.cpp's server, a different model) can stand
 in by implementing `chat()`; the agent never depends on which.
@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 
 DEFAULT_URL = "http://127.0.0.1:11434"
-DEFAULT_MODEL = "qwen3:4b"
+DEFAULT_MODEL = "qwen3:4b-instruct"     # Qwen3-4B-Instruct-2507: answers directly (the plain qwen3:4b tag is the always-thinking build)
 THINK_RE = re.compile(r"<think>.*?</think>", re.S)
 
 

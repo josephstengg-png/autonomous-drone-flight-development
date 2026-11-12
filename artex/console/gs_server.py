@@ -35,6 +35,7 @@ from artex.planner import gs_planner as planner  # noqa: E402
 from artex.console import sessions  # noqa: E402
 from artex.assistant import agent as assistant  # noqa: E402
 from artex.assistant.llm import OllamaChat  # noqa: E402
+from artex.assistant import actions as assistant_actions  # noqa: E402
 from artex.fleetops.swarm_deploy import host_argv, push as push_plan  # noqa: E402
 from artex.common import layout, version  # noqa: E402
 
@@ -628,6 +629,7 @@ class App:
         self.lock = threading.Lock()
         self.sessions = sessions.Sessions()
         self.llm = OllamaChat()
+        self.delegations: dict[str, dict] = {}     # run token -> {kind, profile, operator}: runs the assistant may execute
         self.pin_fails: dict[str, list[float]] = {}
 
     def quick_authorise(self, kind: str, p: dict, s: dict, body: dict) -> tuple[int, dict]:
@@ -654,16 +656,88 @@ class App:
                              need_pilots=no_pilot)
         if body.get("confirm") != "AUTHORISE":
             return 403, dict(error="Tick the confirmation and press and hold Authorise.")
-        if body.get("delegate"):
-            return 403, dict(error="Delegating the gates to the assistant arrives in Phase C; authorise and fly the gates yourself.")
+        delegate = bool(body.get("delegate"))
+        if delegate and not self.demo and not assistant_actions.live_allowed():
+            return 403, dict(error="Delegating to the assistant is switched off for real aircraft on this installation "
+                                   f"({assistant_actions.LIVE_SWITCH}). Authorise and press the gates yourself.")
         rec = dict(operator=s["operator"], pilots={str(x): s["pilots"][str(x)] for x in sysids}, accepted=sorted(need),
                    confirmations=[c["text"] for c in confs], phrase="quick authorisation: signed-in operator, one "
                    "confirmation, press-and-hold", aircraft_typed=", ".join(f"ARTEX{x}" for x in sysids),
-                   authorised=time.strftime("%Y-%m-%d %H:%M:%S"), quick=True, delegate=False)
-        return 200, dict(token=self.tokens.issue(p, s["operator"], rec), ttl_s=core.TOKEN_TTL_S)
+                   authorised=time.strftime("%Y-%m-%d %H:%M:%S"), quick=True, delegate=delegate)
+        tok = self.tokens.issue(p, s["operator"], rec)
+        if delegate:
+            self.delegations[tok] = dict(kind="fleet" if kind == "fleet" else "single", profile=p, operator=s["operator"])
+        return 200, dict(token=tok, ttl_s=core.TOKEN_TTL_S, delegated=delegate)
 
     def busy(self) -> bool:
         return bool((self.run and self.run.active) or (self.fleet and self.fleet.active))
+
+    # ---- starting runs and pressing gates: ONE implementation for the operator's buttons and the assistant ----
+    def start_run(self, p: dict, token: str | None) -> tuple[int, dict]:
+        tok = self.tokens.get(token, p)
+        if not tok:
+            return 403, dict(error="Authorisation missing, expired or for a different profile.")
+        problem = self.version_problem(p["sysids"])
+        if problem:
+            return 409, dict(error=problem)
+        with self.lock:
+            if self.busy():
+                return 409, dict(error="A run is already active. Only one agent may hold the link.")
+            rid = core.new_run_id()
+            rec = dict(id=rid, started=time.strftime("%Y-%m-%d %H:%M:%S"), mode="demo" if self.demo else "live",
+                       profile=p, **tok["record"])
+            if len(p["sysids"]) > 1:
+                rec["kind"] = "group"
+                self.run = GroupRun(rec, self.demo)
+            else:
+                self.run = Run(rec, core.agent_argv(p, f"/tmp/gs_{rid}.csv"), self.demo)
+            self.run.start()
+        return 200, dict(id=rid)
+
+    def arm_run(self, token: str | None, confirm: str | None) -> tuple[int, dict]:
+        run = self.run
+        if not run or run.state != "ready" or run.arm_sent:
+            return 409, dict(error="The agent is not waiting at READY.")
+        tok = self.tokens.get(token, run.rec["profile"])
+        if not tok or confirm != "ARM":
+            return 403, dict(error="Authorisation expired or ARM not confirmed. Authorise again.")
+        run.arm_sent = True
+        self.tokens.revoke(token)
+        run.rec["arm_requested"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        return 200, dict(ok=run.send("ARM"))
+
+    def start_fleet(self, p: dict, token: str | None) -> tuple[int, dict]:
+        tok = self.tokens.get(token, p)
+        if not tok:
+            return 403, dict(error="Authorisation missing, expired or for a different fleet profile.")
+        problem = self.version_problem([m["sysid"] for m in p["aircraft"]])
+        if problem:
+            return 409, dict(error=problem)
+        with self.lock:
+            if self.busy():
+                return 409, dict(error="A run is already active. Only one agent may hold each link.")
+            rid = core.new_run_id()
+            rec = dict(id=rid, kind="fleet", started=time.strftime("%Y-%m-%d %H:%M:%S"),
+                       mode="demo" if self.demo else "live", profile=p, **tok["record"])
+            self.fleet = FleetRun(rec, self.demo)
+            self.fleet.start()
+        return 200, dict(id=rid)
+
+    def fleet_gate(self, which: str, token: str | None, confirm: str | None) -> tuple[int, dict]:
+        fr = self.fleet
+        if not fr or not fr.active:
+            return 409, dict(error="No active fleet run.")
+        arm = which == "arm"
+        if (arm and fr.state != "ready") or (not arm and (fr.state != "armed" or fr.p["mode"] != "mission")):
+            return 409, dict(error="Not at that gate." if arm else "Not every aircraft is armed, or this is not a mission run.")
+        tok = self.tokens.get(token, fr.p)
+        if not tok or confirm != ("ARM ALL" if arm else "START ALL"):
+            return 403, dict(error="Authorisation expired or not confirmed. Authorise again.")
+        (fr.arm_evt if arm else fr.start_evt).set()
+        fr.rec["arm_all_pressed" if arm else "start_all_pressed"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        if not arm:
+            self.tokens.revoke(token)
+        return 200, dict(ok=True)
 
     # ---- version handshake: never drive a companion running different agent code -----------
     def remote_version(self, sysid: int) -> dict | None:
@@ -827,7 +901,8 @@ def make_handler(app: App):
                 return self._send(200, dict(signed_in=bool(ses), has_operators=sessions.has_operators(),
                                             operator=ses and ses["operator"], pilots=ses and ses["pilots"]))
             if u.path == "/api/assistant/status":
-                return self._send(200, dict(app.llm.status(), phase="B", mode="advise only"))
+                return self._send(200, dict(app.llm.status(), phase="C",
+                                            delegation_available=app.demo or assistant_actions.live_allowed()))
             if u.path == "/api/version":
                 return self._send(200, dict(version.report(), demo=app.demo, remote_dir=layout.REMOTE_DIR))
             if u.path == "/api/runs":
@@ -883,8 +958,11 @@ def make_handler(app: App):
                 q = str(b.get("question", "")).strip()
                 if not q:
                     return self._send(400, dict(error="Ask a question."))
+                tok = b.get("token") if isinstance(b.get("token"), str) else None
                 return self._send(200, assistant.ask(q[:2000], b.get("context") if isinstance(b.get("context"), dict) else None,
-                                                     llm=app.llm))
+                                                     llm=app.llm, phase="C", extra_tools=assistant_actions.tools_for(app, tok),
+                                                     act_ok=assistant_actions.delegation_problem(app, tok) is None,
+                                                     delegation=app.delegations.get(tok or "")))
             if path in ("/api/run/authorise_quick", "/api/fleet/authorise_quick"):
                 ses = app.sessions.get(self.headers.get("X-GS-Session"))
                 if not ses:
@@ -907,37 +985,10 @@ def make_handler(app: App):
                                                            int(b.get("drones", 0)), float(b.get("altitude", "nan")),
                                                            float(b.get("overlap", "nan")), str(b.get("scan", ""))))
             if path == "/api/run/start":
-                p = core.normalise(b["profile"])
-                tok = app.tokens.get(b.get("token"), p)
-                if not tok:
-                    return self._send(403, dict(error="Authorisation missing, expired or for a different profile."))
-                problem = app.version_problem(p["sysids"])
-                if problem:
-                    return self._send(409, dict(error=problem))
-                with app.lock:
-                    if app.busy():
-                        return self._send(409, dict(error="A run is already active. Only one agent may hold the link."))
-                    rid = core.new_run_id()
-                    rec = dict(id=rid, started=time.strftime("%Y-%m-%d %H:%M:%S"), mode="demo" if app.demo else "live",
-                               profile=p, **tok["record"])
-                    if len(p["sysids"]) > 1:
-                        rec["kind"] = "group"
-                        app.run = GroupRun(rec, app.demo)
-                    else:
-                        app.run = Run(rec, core.agent_argv(p, f"/tmp/gs_{rid}.csv"), app.demo)
-                    app.run.start()
-                return self._send(200, dict(id=rid))
+                return self._send(*app.start_run(core.normalise(b["profile"]), b.get("token")))
             run = app.run
             if path == "/api/run/arm":
-                if not run or run.state != "ready" or run.arm_sent:
-                    return self._send(409, dict(error="The agent is not waiting at READY."))
-                tok = app.tokens.get(b.get("token"), run.rec["profile"])
-                if not tok or b.get("confirm") != "ARM":
-                    return self._send(403, dict(error="Authorisation expired or ARM not confirmed. Authorise again."))
-                run.arm_sent = True
-                app.tokens.revoke(b["token"])
-                run.rec["arm_requested"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                return self._send(200, dict(ok=run.send("ARM")))
+                return self._send(*app.arm_run(b.get("token"), b.get("confirm")))
             if path == "/api/run/word":
                 w = str(b.get("word", "")).upper()
                 if not run or not run.active:
@@ -1033,38 +1084,12 @@ def make_handler(app: App):
                            authorised=time.strftime("%Y-%m-%d %H:%M:%S"))
                 return self._send(200, dict(token=app.tokens.issue(p, b["operator"], rec), ttl_s=core.TOKEN_TTL_S))
             if path == "/api/fleet/start":
-                p = fleet.normalise(b["profile"])
-                tok = app.tokens.get(b.get("token"), p)
-                if not tok:
-                    return self._send(403, dict(error="Authorisation missing, expired or for a different fleet profile."))
-                problem = app.version_problem([m["sysid"] for m in p["aircraft"]])
-                if problem:
-                    return self._send(409, dict(error=problem))
-                with app.lock:
-                    if app.busy():
-                        return self._send(409, dict(error="A run is already active. Only one agent may hold each link."))
-                    rid = core.new_run_id()
-                    rec = dict(id=rid, kind="fleet", started=time.strftime("%Y-%m-%d %H:%M:%S"),
-                               mode="demo" if app.demo else "live", profile=p, **tok["record"])
-                    app.fleet = FleetRun(rec, app.demo)
-                    app.fleet.start()
-                return self._send(200, dict(id=rid))
+                return self._send(*app.start_fleet(fleet.normalise(b["profile"]), b.get("token")))
             fr = app.fleet
             if not fr or not fr.active:
                 return self._send(409, dict(error="No active fleet run."))
             if path in ("/api/fleet/arm_all", "/api/fleet/start_all"):
-                arm = path.endswith("arm_all")
-                if (arm and fr.state != "ready") or (not arm and (fr.state != "armed" or fr.p["mode"] != "mission")):
-                    return self._send(409, dict(error="Not at that gate." if arm else "Not every aircraft is armed, "
-                                                "or this is not a mission run."))
-                tok = app.tokens.get(b.get("token"), fr.p)
-                if not tok or b.get("confirm") != ("ARM ALL" if arm else "START ALL"):
-                    return self._send(403, dict(error="Authorisation expired or not confirmed. Authorise again."))
-                (fr.arm_evt if arm else fr.start_evt).set()
-                fr.rec["arm_all_pressed" if arm else "start_all_pressed"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                if not arm:
-                    app.tokens.revoke(b["token"])
-                return self._send(200, dict(ok=True))
+                return self._send(*app.fleet_gate("arm" if path.endswith("arm_all") else "start", b.get("token"), b.get("confirm")))
             if path == "/api/fleet/word":
                 w = str(b.get("word", "")).upper()
                 return self._send(200, dict(sent=fr.word(w, str(b.get("target", "all")))))

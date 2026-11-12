@@ -9,20 +9,26 @@ from __future__ import annotations
 
 from artex.assistant import tools
 
-PHASE_KINDS = {"B": {"read", "draft"}}
+PHASE_KINDS = {"B": {"read", "draft"}, "C": {"read", "draft", "stop"}}   # "act" is added per question, only with a delegation
 MAX_STEPS = 6                      # tool rounds per question
 MAX_CALLS_PER_STEP = 4
 
 
-def allowed_kinds(phase: str = "B") -> set[str]:
-    return PHASE_KINDS.get(phase, {"read"})
+def allowed_kinds(phase: str = "B", act_ok: bool = False) -> set[str]:
+    kinds = set(PHASE_KINDS.get(phase, {"read"}))
+    if phase == "C" and act_ok:
+        kinds.add("act")
+    return kinds
 
 
-def check(name: str, phase: str = "B") -> str | None:
+def check(name: str, phase: str = "B", available: dict | None = None, act_ok: bool = False) -> str | None:
     """None if the call may go ahead, else the refusal text."""
-    if name not in tools.TOOLS:
+    registry = available if available is not None else tools.TOOLS
+    if name not in registry:
         return f"refused: there is no tool called {name!r}"
-    kind = tools.TOOLS[name][0]
-    if kind not in allowed_kinds(phase):
+    kind = registry[name][0]
+    if kind not in allowed_kinds(phase, act_ok):
+        if kind == "act":
+            return f"refused: {name} needs the operator's delegated authorisation for this run"
         return f"refused: {name} is an '{kind}' tool and the assistant is advise-only (Phase {phase})"
     return None

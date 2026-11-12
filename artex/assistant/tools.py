@@ -142,13 +142,13 @@ TOOLS = {
 }
 
 
-def schemas(kinds: set[str]) -> list[dict]:
-    return [t[2] for t in TOOLS.values() if t[0] in kinds]
+def schemas(kinds: set[str], registry: dict | None = None) -> list[dict]:
+    return [t[2] for t in (registry or TOOLS).values() if t[0] in kinds]
 
 
-def run_tool(name: str, args: dict) -> str:
+def run_tool(name: str, args: dict, registry: dict | None = None) -> str:
     """Call a tool and return compact JSON for the model (truncated)."""
-    fn = TOOLS[name][1]
+    fn = (registry or TOOLS)[name][1]
     try:
         out = fn(**{k: v for k, v in (args or {}).items() if not k.startswith("_")})
     except TypeError as exc:

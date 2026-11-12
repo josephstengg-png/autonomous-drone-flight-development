@@ -347,9 +347,9 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
 </div>
 <button class="btn solid asst-btn" id="asBtn" type="button" aria-expanded="false">Assistant</button>
 <div class="panel asst" id="asPanel" hidden role="dialog" aria-label="Assistant">
- <div class="verdict" style="justify-content:space-between"><h2 style="margin:0">Assistant <span class="pill WAIT">advise only</span></h2><button class="btn" id="asClose" type="button">Close</button></div>
+ <div class="verdict" style="justify-content:space-between"><h2 style="margin:0">Assistant</h2><button class="btn" id="asClose" type="button">Close</button></div>
  <div class="e" id="asStatus">Checking the model…</div>
- <div class="e">It reads runs, missions, profiles and the docs, explains, and drafts profiles or planner settings for you to apply. It cannot arm, start, stop, save or upload.</div>
+ <div class="e">It reads runs, missions, profiles and the docs, explains, and drafts profiles or planner settings for you to apply. It can <b>stop</b> aircraft (hold, return, land) at any time. It can <b>fly a run only if you authorised it with "delegate to the assistant"</b>; then the console presses each gate when it is due. Your pilots' handsets stay the override.</div>
  <textarea id="asQ" rows="3" placeholder="e.g. Why didn't ARTEX115 arm in the last run?  /  Plan Seletar with 2 drones at 30 m"></textarea>
  <div class="bar"><button class="btn solid" id="asAsk" type="button">Ask</button><span class="e" id="asMsg"></span></div>
  <div id="asOut"></div>
@@ -516,7 +516,7 @@ function tick() {
   if (TOKEN) {
     const left = Math.max(0, ST.ttl_s - (Date.now() - TOKEN_AT) / 1000);
     if (left <= 0) { TOKEN = null; $('authBox').hidden = true; refreshRun(); return; }
-    $('authBox').innerHTML = `<b>Authorised</b> by ${esc(SES.operator || '')} for ${acNames(RUNPROF).join(', ')}, this exact profile. Expires in ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}. <button class="btn" id="revoke" type="button">Withdraw</button>`;
+    $('authBox').innerHTML = `<b>Authorised</b> by ${esc(SES.operator || '')} for ${acNames(RUNPROF).join(', ')}, this exact profile${DELEG ? ' <b>and delegated to the assistant</b> (ask it to fly the run)' : ''}. Expires in ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}. <button class="btn" id="revoke" type="button">Withdraw</button>`;
     $('revoke').onclick = () => { TOKEN = null; $('authBox').hidden = true; refreshRun(); };
   }
   if (SNAP && SNAP.state === 'ready' && SNAP.t.ready) {
@@ -619,7 +619,7 @@ async function showRec(id) {
 
 
 /* ---------- assistant (Phase B: advise only) ---------- */
-async function asStatus() { try { const r = await api('GET', '/api/assistant/status'); $('asStatus').innerHTML = `Model <b>${esc(r.model)}</b>: <span class="pill ${r.ok ? 'GO' : 'NOGO'}">${r.ok ? 'READY' : 'NOT READY'}</span> <span class="e">${esc(r.detail)}</span>`; } catch (e) { $('asStatus').textContent = e.message; } }
+async function asStatus() { try { const r = await api('GET', '/api/assistant/status'); DELEG_OK = !!r.delegation_available; $('asStatus').innerHTML = `Model <b>${esc(r.model)}</b>: <span class="pill ${r.ok ? 'GO' : 'NOGO'}">${r.ok ? 'READY' : 'NOT READY'}</span> <span class="e">${esc(r.detail)}</span>`; } catch (e) { $('asStatus').textContent = e.message; } }
 $('asBtn').onclick = () => { const open = $('asPanel').hidden; $('asPanel').hidden = !open; $('asBtn').setAttribute('aria-expanded', String(open)); if (open) { asStatus(); $('asQ').focus(); } };
 $('asClose').onclick = () => { $('asPanel').hidden = true; $('asBtn').setAttribute('aria-expanded', 'false'); };
 $('asQ').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('asAsk').click(); });
@@ -628,7 +628,8 @@ $('asAsk').onclick = async () => {
   $('asAsk').disabled = true; $('asMsg').textContent = 'Thinking… (a few seconds on a local model)';
   const context = {page, run: SNAP && SNAP.id, fleet_run: FSNAP && FSNAP.id, editing_profile: ED && ED.name, editing_fleet_profile: FED && FED.name};
   try {
-    const r = await api('POST', '/api/assistant/ask', {question: q, context});
+    const token = FDELEG && FTOKEN ? FTOKEN : DELEG && TOKEN ? TOKEN : null;
+    const r = await api('POST', '/api/assistant/ask', {question: q, context, token});
     $('asMsg').textContent = r.error ? '' : `${r.seconds} s, ${r.calls.length} lookup${r.calls.length === 1 ? '' : 's'}`;
     $('asOut').innerHTML = (r.error ? `<div class="blockbox"><b>The model did not answer</b><div class="e" style="color:var(--ink)">${esc(r.error)}</div></div>` : `<div class="ans">${esc(r.answer)}</div>`)
       + (r.proposals || []).map((pr, i) => `<div class="note"><b>Draft: ${esc(pr.proposal.replace('_', ' '))}</b>${(pr.errors || []).length ? `<div class="err">${pr.errors.map(esc).join('<br>')}</div>` : ''}<div class="e">${esc(pr.note || '')}</div><div class="bar"><button class="btn solid" data-pi="${i}" type="button">Apply to the form</button></div></div>`).join('')
@@ -671,6 +672,7 @@ async function autoPreflight() { if (!SES.signed_in || !$('sesAuto') || !$('sesA
   for (const a of ST.aircraft) { try { await api('POST', '/api/preflight', {sysid: a}); } catch (e) {} } await loadState(); connectRender(); }
 setInterval(autoPreflight, 10 * 60 * 1000);
 const QA = {run: {prev: null, prof: null}, fleet: {prev: null, prof: null}};
+let DELEG = false, FDELEG = false, DELEG_OK = false;
 function qaRender(kind, prev, prof) {
   const box = $('qa-' + kind); QA[kind] = {prev, prof}; if (!box) return;
   if (!prev) { box.innerHTML = ''; return; }
@@ -685,7 +687,7 @@ function qaRender(kind, prev, prof) {
     + `<div class="note"><b>Pilots</b><div class="e">${pil.map(([k, v]) => v ? `ARTEX${esc(k)}: ${esc(v)}` : `<span class="err">ARTEX${esc(k)}: no pilot named</span>`).join(' &middot; ')}${(ses.missing_pilots || []).length ? ' &mdash; name them on the Connect page.' : ''}</div></div>`
     + `<label class="chk"><input type="checkbox" id="qa-${kind}-cf"><span><b>For this run I confirm:</b><br>${(prev.confirmations || []).map(c => esc(c.text)).join('<br>')}</span></label>`
     + `<button class="arm" id="qa-${kind}-hold" type="button" disabled><div class="fill" id="qa-${kind}-fill"></div><span>HOLD TO AUTHORISE<span class="why" id="qa-${kind}-why"></span></span></button>`
-    + `<label class="chk" style="opacity:.6"><input type="checkbox" disabled><span>Delegate the gates to the assistant <span class="e">(arrives in Phase C)</span></span></label>`
+    + `<label class="chk" style="opacity:${DELEG_OK ? 1 : .6}"><input type="checkbox" id="qa-${kind}-dg" ${DELEG_OK ? '' : 'disabled'}><span>Delegate the gates to the assistant <span class="e">${DELEG_OK ? '(it may start this run and press ARM ALL / START ALL when the console says they are due; stopping is always allowed)' : '(switched off for real aircraft on this installation)'}</span></span></label>`
     + `<span class="e" id="qa-${kind}-msg"></span>`
     + notes.map(i => `<details><summary class="e">${esc(i.title)}</summary><div class="e">${esc(i.text)}</div></details>`).join('');
   const accBtn = $(`qa-${kind}-acc`);
@@ -707,8 +709,8 @@ function makeQaHold(kind) {
   const stop = () => { if (t) { clearInterval(t); t = null; } const f = $(`qa-${kind}-fill`); if (f) f.style.width = '0'; };
   const start = e => { if (btn.disabled || t) return; e.preventDefault(); at = performance.now();
     t = setInterval(async () => { const f = Math.min(1, (performance.now() - at) / 1200); $(`qa-${kind}-fill`).style.width = f * 100 + '%';
-      if (f >= 1) { stop(); try { const r = await api('POST', kind === 'fleet' ? '/api/fleet/authorise_quick' : '/api/run/authorise_quick', {profile: QA[kind].prof, confirm: 'AUTHORISE'});
-        if (kind === 'fleet') { FTOKEN = r.token; FTOKEN_AT = Date.now(); $('fAuthBox').hidden = false; fTick(); fCtl(); } else { TOKEN = r.token; TOKEN_AT = Date.now(); $('authBox').hidden = false; tick(); ctlState(); }
+      if (f >= 1) { stop(); try { const dg = !!($(`qa-${kind}-dg`) || {}).checked; const r = await api('POST', kind === 'fleet' ? '/api/fleet/authorise_quick' : '/api/run/authorise_quick', {profile: QA[kind].prof, confirm: 'AUTHORISE', delegate: dg});
+        if (kind === 'fleet') { FTOKEN = r.token; FTOKEN_AT = Date.now(); FDELEG = r.delegated; $('fAuthBox').hidden = false; fTick(); fCtl(); } else { TOKEN = r.token; TOKEN_AT = Date.now(); DELEG = r.delegated; $('authBox').hidden = false; tick(); ctlState(); }
         qaState(kind); } catch (er) { $(`qa-${kind}-msg`).textContent = er.message; } } }, 30); };
   btn.addEventListener('pointerdown', start); ['pointerup', 'pointerleave', 'pointercancel', 'blur'].forEach(ev => btn.addEventListener(ev, stop));
   btn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') start(e); }); btn.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') stop(); });
@@ -921,7 +923,7 @@ function fTick() {
   if (FTOKEN) {
     const left = Math.max(0, ST.ttl_s - (Date.now() - FTOKEN_AT) / 1000);
     if (left <= 0) { FTOKEN = null; $('fAuthBox').hidden = true; fAuthState(); fCtl(); }
-    else $('fAuthBox').innerHTML = `<b>Authorised</b> by ${esc(SES.operator || '')}, pilots ${Object.entries((FPREV && FPREV.session && FPREV.session.pilots) || {}).map(([k, v]) => 'ARTEX' + k + ' ' + esc(v)).join(', ')}. This exact fleet profile. Expires in ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}.`;
+    else $('fAuthBox').innerHTML = `<b>Authorised</b>${FDELEG ? ' <b>and delegated to the assistant</b>' : ''} by ${esc(SES.operator || '')}, pilots ${Object.entries((FPREV && FPREV.session && FPREV.session.pilots) || {}).map(([k, v]) => 'ARTEX' + k + ' ' + esc(v)).join(', ')}. This exact fleet profile. Expires in ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}.`;
   }
   const w = FSNAP && FSNAP.window_s;
   $('fClock').textContent = !FSNAP ? '' : FSNAP.state === 'ready' && w != null ? (FSNAP.arm_pressed ? 'ARM ALL sent.' : `ARM ALL within ${Math.ceil(w)} s, or every agent lets go and nobody arms.`)
@@ -1015,7 +1017,7 @@ async function boot() {
   $('f-acs').innerHTML = ST.aircraft.map(a => `<label class="chk" style="margin:0 10px 0 0"><input type="checkbox" class="f-ac" value="${a}"><span>ARTEX${a}</span></label>`).join('');
   document.querySelectorAll('.f-ac').forEach(c => c.addEventListener('change', edChanged));
   $('f-stage').innerHTML = ST.stages.map(([s, n]) => `<option value="${s}">${s}: ${esc(n)}</option>`).join('');
-  await loadSession(); connectRender(); await loadProfiles(); await fBoot(); await loadKml(); await loadMissions();
+  await loadSession(); asStatus(); connectRender(); await loadProfiles(); await fBoot(); await loadKml(); await loadMissions();
   edLoad(PROFILES[0] || Object.assign({}, ST.defaults, {name: ''}));
   const s = await api('GET', '/api/run?since=0'); if (s.state !== 'none') { SNAP = s; SINCE = s.feed.length; s.feed.forEach(f => $('feed').insertAdjacentHTML('afterbegin', line(f))); if (running()) startPoll(); else showResult(s); }
   rail(); setInterval(tick, 1000);
