@@ -208,7 +208,8 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
     <div class="e">Each drone's planned path, drawn from its <code>.plan</code> file: what the agent uploads. <b>On board</b> means an agent read that mission back from the aircraft in a Fleet run and the item count matched. It is not QGC's view, which goes stale.</div>
     <label class="f">Mission<select id="mv-sel"></select></label>
     <div class="modes"><button class="btn on" id="mv-2d" type="button">2D map</button><button class="btn" id="mv-3d" type="button">3D view</button><label class="e" id="mv-exl" hidden>Heights <select id="mv-ex"><option value="1">true scale</option><option value="3" selected>exaggerated &times;3</option><option value="10">exaggerated &times;10</option></select></label><span class="e" id="mv-3dnote"></span></div>
-    <canvas id="mv-cv" style="height:400px;margin-top:8px" aria-label="Mission map: fence, operating area and each drone's path"></canvas>
+    <div id="mv-map" class="amap" style="height:460px" aria-label="Mission map on satellite imagery: fence, operating area and each drone's path"></div>
+    <canvas id="mv-cv" style="height:400px;margin-top:8px;display:none" aria-label="Mission map: fence, operating area and each drone's path"></canvas>
     <div id="mv-v3" class="v3" hidden aria-label="3D view of the mission: fence, area, each drone's path at its altitude"></div>
     <div class="legend" id="mv-leg"></div>
     <table id="mv-tab" style="margin-top:6px"></table>
@@ -384,7 +385,7 @@ function rail() {
   $('rail').innerHTML = PAGES.map(([k, n, t]) => `<button class="step ${k === page ? 'cur' : ''} ${(k === 'run' && live) || (k === 'fleet' && flive) ? 'live' : ''}" data-k="${k}" type="button"><div class="n">${n}</div><div class="t">${t}</div><div class="s">${k === 'run' && live ? 'RUN ACTIVE: ' + SNAP.state.toUpperCase() : k === 'fleet' && flive ? 'FLEET ACTIVE: ' + FSNAP.state.toUpperCase() : k === 'prof' ? PROFILES.length + ' saved' : k === 'fleet' ? FPROFILES.length + ' fleet profiles' : ''}&nbsp;</div></button>`).join('');
   $('rail').querySelectorAll('.step').forEach(b => b.onclick = () => go(b.dataset.k));
 }
-function go(k) { page = k; PAGES.forEach(([p]) => $('pg-' + p).classList.toggle('on', p === k)); rail(); if (k === 'rec') loadRecs(); if (k === 'run') refreshRun(); if (k === 'prof') { edPreview(); loadMissions(); arInit(); arLoadList(); setTimeout(() => AR.map && AR.map.invalidateSize(), 50); } if (k === 'fleet') fPreview(); redraw(); }
+function go(k) { page = k; PAGES.forEach(([p]) => $('pg-' + p).classList.toggle('on', p === k)); rail(); if (k === 'rec') loadRecs(); if (k === 'run') refreshRun(); if (k === 'prof') { edPreview(); loadMissions(); arInit(); arLoadList(); setTimeout(() => { AR.map && AR.map.invalidateSize(); MVM.map && MVM.map.invalidateSize(); }, 50); } if (k === 'fleet') fPreview(); redraw(); }
 
 /* ---------- connect ---------- */
 function acCard(s) {
@@ -764,9 +765,45 @@ function arDraw(fit) {
 }
 /* 2D / 3D switch */
 let MV3D = false;
-function mvMode(three) { MV3D = three; $('mv-2d').classList.toggle('on', !three); $('mv-3d').classList.toggle('on', three); $('mv-cv').style.display = three ? 'none' : ''; $('mv-v3').hidden = !three; $('mv-exl').hidden = !three; mvRender(); }
-function mvRender() { if (!MV3D) { mvDraw(); return; } if (window.ARTEX3D && MV) { window.ARTEX3D.render(MV, $('mv-v3'), {ex: +$('mv-ex').value}); $('mv-3dnote').textContent = 'Drag to orbit, scroll to zoom, right-drag to pan. Fence height shown = mission top + 5 m (the aircraft\'s GF_MAX_VER_DIST decides). Heights are drawn exaggerated unless you pick true scale.'; } else $('mv-3dnote').textContent = window.ARTEX3D ? 'Choose a mission.' : '3D library did not load.'; }
+if (typeof L === 'undefined') { $('mv-map').style.display = 'none'; $('mv-cv').style.display = ''; }   // no map library: the plain canvas drawing
+function mvMode(three) { MV3D = three; $('mv-2d').classList.toggle('on', !three); $('mv-3d').classList.toggle('on', three); const leaf = typeof L !== 'undefined'; $('mv-map').style.display = three || !leaf ? 'none' : ''; $('mv-cv').style.display = three || leaf ? 'none' : ''; $('mv-v3').hidden = !three; $('mv-exl').hidden = !three; mvRender(); }
+function mvRender() { if (!MV3D) { if (typeof L !== 'undefined') mvMap(); else mvDraw(); return; } if (window.ARTEX3D && MV) { window.ARTEX3D.render(MV, $('mv-v3'), {ex: +$('mv-ex').value}); $('mv-3dnote').textContent = 'Drag to orbit, scroll to zoom, right-drag to pan. Fence height shown = mission top + 5 m (the aircraft\'s GF_MAX_VER_DIST decides). Heights are drawn exaggerated unless you pick true scale.'; } else $('mv-3dnote').textContent = window.ARTEX3D ? 'Choose a mission.' : '3D library did not load.'; }
 $('mv-2d').onclick = () => mvMode(false); $('mv-3d').onclick = () => mvMode(true); $('mv-ex').onchange = mvRender;
+
+
+/* mission on satellite imagery (Leaflet; Esri World Imagery by default, ARTEX_SAT_TILES for the customer's provider) */
+const MVM = {map: null, layer: null, fitted: null};
+const SATCOL = ['#38bdf8', '#fbbf24', '#4ade80', '#f472b6'];   // bright on imagery; each line also gets a dark casing
+function mvMap() {
+  const el = $('mv-map'); if (!el || el.style.display === 'none') return;
+  if (!MVM.map) {
+    const m = ST.map || {};
+    const sat = L.tileLayer(m.satellite || 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxNativeZoom: 19, maxZoom: 21, attribution: m.satellite_attribution || 'Imagery &copy; Esri'});
+    const street = L.tileLayer(m.tiles || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxNativeZoom: 19, maxZoom: 21, attribution: m.attribution || '&copy; OpenStreetMap contributors'});
+    MVM.map = L.map(el, {layers: [sat], zoomSnap: 0.25});
+    L.control.layers({'Satellite': sat, 'Street map': street}, null, {position: 'topright'}).addTo(MVM.map);
+    L.control.scale({imperial: false}).addTo(MVM.map);
+    sat.on('tileerror', () => { $('mv-3dnote').textContent = 'No imagery tiles (offline?): the paths are still drawn. Set ARTEX_SAT_TILES to a local tile cache for field use.'; });
+    MVM.layer = L.layerGroup().addTo(MVM.map);
+  }
+  MVM.map.invalidateSize();
+  MVM.layer.clearLayers();
+  if (!MV) return;
+  const all = [];
+  MV.fence.forEach(f => { L.polygon(f, {color: '#ff5a5a', weight: 2.5, dashArray: '8 6', fill: false}).bindTooltip('geofence').addTo(MVM.layer); all.push(...f); });
+  MV.ops.forEach(o => { L.polygon(o, {color: '#ffffff', weight: 1.5, fillColor: '#ffffff', fillOpacity: 0.12}).bindTooltip('operating area').addTo(MVM.layer); all.push(...o); });
+  MV.drones.forEach((d, i) => {
+    const c = SATCOL[i % 4], pts = d.points.map(p => [p[0], p[1]]); if (!pts.length) return;
+    L.polyline(pts, {color: '#000', weight: 6, opacity: 0.55}).addTo(MVM.layer);
+    L.polyline(pts, {color: c, weight: 3}).bindTooltip(`${d.name}: ${d.items} items, top ${d.top_alt_m} m, ${d.km} km`, {sticky: true}).addTo(MVM.layer);
+    pts.forEach((p, j) => L.circleMarker(p, {radius: 3.5, color: '#000', weight: 1, fillColor: c, fillOpacity: 1})
+      .bindTooltip(`${d.name} waypoint ${j + 1}: ${d.points[j][2] || 0} m`).addTo(MVM.layer));
+    if (pts[1]) L.marker(pts[1], {icon: L.divIcon({className: '', html: `<b style="color:${c};text-shadow:0 0 3px #000,0 0 3px #000;font:700 12px system-ui">${esc(d.name.replace('drone-', 'D'))}</b>`, iconAnchor: [-6, 14]})}).addTo(MVM.layer);
+    all.push(...pts);
+  });
+  if (MV.home && MV.home[0] != null) { L.marker(MV.home, {title: 'home / launch', icon: L.divIcon({className: '', html: '<div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:14px solid #fff;filter:drop-shadow(0 0 2px #000)"></div>', iconSize: [16, 14], iconAnchor: [8, 10]})}).bindTooltip('home / launch').addTo(MVM.layer); all.push(MV.home); }
+  if (all.length && MVM.fitted !== MV.folder) { MVM.map.fitBounds(L.latLngBounds(all).pad(0.12)); MVM.fitted = MV.folder; }
+}
 
 /* ---------- missions on the map ---------- */
 let MV = null;
@@ -781,8 +818,8 @@ async function loadMissions(sel) {
 $('mv-sel').onchange = () => mvLoad($('mv-sel').value);
 async function mvLoad(folder) {
   try { MV = await api('GET', '/api/planner/mission?folder=' + encodeURIComponent(folder)); } catch (e) { MV = null; $('mv-tab').innerHTML = `<tr><td class="err">${esc(e.message)}</td></tr>`; mvDraw(); return; }
-  $('mv-tab').innerHTML = '<tr><th>Drone</th><th>Items</th><th>Top</th><th>Path</th><th>On board</th></tr>' + MV.drones.map((d, i) => `<tr><td><i class="sw" style="background:${DCOL(i)};height:4px"></i>${esc(d.name)}</td><td>${d.items}</td><td>${d.top_alt_m} m</td><td>${d.km} km</td><td>${d.onboard ? `<span class="pill GO">ARTEX${d.onboard.sysid}</span> <span class="e">${esc(d.onboard.detail)}, run ${esc(d.onboard.run)}${d.onboard.mode === 'demo' ? ' (DEMO)' : ''}</span>` : '<span class="pill NOTRUN">not uploaded yet</span>'}</td></tr>`).join('');
-  $('mv-leg').innerHTML = `<span><i class="sw" style="background:var(--fence)"></i>geofence</span>${MV.ops.length ? '<span><i class="sw" style="background:var(--ops)"></i>operating area</span>' : '<span class="e">operating area: KML not recorded for this folder</span>'}<span>&#9650; home / launch</span>`
+  $('mv-tab').innerHTML = '<tr><th>Drone</th><th>Items</th><th>Top</th><th>Path</th><th>On board</th></tr>' + MV.drones.map((d, i) => `<tr><td><i class="sw" style="background:${typeof L !== 'undefined' ? SATCOL[i % 4] : DCOL(i)};height:4px"></i>${esc(d.name)}</td><td>${d.items}</td><td>${d.top_alt_m} m</td><td>${d.km} km</td><td>${d.onboard ? `<span class="pill GO">ARTEX${d.onboard.sysid}</span> <span class="e">${esc(d.onboard.detail)}, run ${esc(d.onboard.run)}${d.onboard.mode === 'demo' ? ' (DEMO)' : ''}</span>` : '<span class="pill NOTRUN">not uploaded yet</span>'}</td></tr>`).join('');
+  $('mv-leg').innerHTML = `<span><i class="sw" style="background:#ff5a5a"></i>geofence</span>${MV.ops.length ? '<span><i class="sw" style="background:var(--ops)"></i>operating area</span>' : '<span class="e">operating area: KML not recorded for this folder</span>'}<span>&#9650; home / launch</span><span class="e">hover a path or waypoint for its details; switch Satellite / Street map top right</span>`
     + (MV.source ? `<span class="e">planned from ${esc(MV.source.kml)}: ${MV.source.drones} drones at ${MV.source.altitude_m} m, ${esc(MV.source.scan)}</span>` : '');
   mvRender();
 }
