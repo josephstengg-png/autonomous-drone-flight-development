@@ -12,7 +12,7 @@ Laptop (console, planner, assistant)  --ssh-->  Jetson per aircraft (agent, rela
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,plot]"
 .venv/bin/python -m artex.console.gs_server --demo        # open http://127.0.0.1:8787
-.venv/bin/python -m pytest -q                              # 443 tests
+.venv/bin/python -m pytest -q                              # 460 tests
 ```
 
 ## Layout
@@ -26,16 +26,36 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev,plot]"
 | `artex/assistant` | Qwen3-4B assistant (Phase B/C) |
 | `artex/common` | layout (where things live, how the agent is started) and the version handshake |
 | `artex/diagnostics` | engineering tools: experiments, flight-log analysis, simulation harnesses (not in the default install) |
-| `demo/` | simulated agents for demo mode |
-| `packaging/` | release bundles (`build_bundles.sh`) |
+| `artex/demo` | simulated agents for demo mode |
+| `packaging/` | release bundles and installers (`build_bundles.sh`, `install-laptop.sh`, `install-companion.sh`) |
 
-Site configuration (per customer, not code): `companions.yaml`, `artex-registry.yaml`, `fleet-*.yaml`,
-`sar_turn_params.params`. Data: `ops/` (sector KMLs), `missions/` (plans), `profiles/`, `runs/` (records).
+Site configuration (per customer, not code): `aircraft.yaml`, `companions.yaml`, `artex-registry.yaml`, `fleet-*.yaml`,
+`sar_turn_params.params`. Data: `ops/` (sector KMLs), `missions/` (plans), `profiles/`, `runs/` (records). In a checkout
+the data lives in the repo; installed, it lives in `ARTEX_HOME` (default `~/.local/share/artex`), seeded on first run.
+
+## Install and release
+
+```bash
+bash packaging/build_bundles.sh     # dist/: wheel, laptop offline tarball, .deb, Jetson companion bundle, SHA256SUMS
+```
+
+Then follow [docs/install.md](docs/install.md) on the laptop and on each Jetson.
+
+## Documents
+
+| | |
+|---|---|
+| [Operator manual](docs/operator-manual.md) | sign-in, planning, flying, stopping, records |
+| [Safety manual](docs/safety-manual.md) | authority order, what the console guarantees, hazard analysis, known limits |
+| [Install](docs/install.md) | laptop, companions, site configuration, the assistant's model |
+| [API](docs/api.md) | every console route and the role it needs |
+| [Architecture](docs/architecture.md) | design and phase history, evaluation results |
+| [Licence notices](LICENSE-NOTICES.md) | third-party components and imagery |
 
 ## Safety model in one paragraph
 The handset is the authority: each aircraft has a named pilot, ch5 OFF takes over, ch8 kill held 5 s stops it. The
 console refuses what the rules forbid (invalid profile, stale preflight on a props-on radio run, a companion running
 different agent code) and records who authorised what. Arming and starting are human-gated; the assistant (Phase C)
-may only act inside one authorised run, and may always stop. See `docs/architecture.md`.
+may only act inside one authorised run, and may always stop. See [docs/safety-manual.md](docs/safety-manual.md).
 
 Status: see `docs/architecture.md` → "Before release".
