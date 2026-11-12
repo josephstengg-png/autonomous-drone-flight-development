@@ -1071,8 +1071,16 @@ PILOT_KILL_TEXTS = ("kill engaged", "kill switch engaged", "flight termination a
 PILOT_MODES = (1, 2, 3, 5, 7, 8)
 AUTOMATIC_MODES = (4, 6)
 OFFBOARD_MAIN_MODE = 6
-INNOVATION_FIELDS = ("vel_ratio", "pos_horiz_ratio", "pos_vert_ratio",
-                     "mag_ratio", "hagl_ratio")
+INNOVATION_FIELDS = ("vel_ratio", "pos_horiz_ratio", "pos_vert_ratio", "hagl_ratio")   # sustained -> LAND
+MAG_INNOVATION_FIELD = "mag_ratio"                                                       # sustained -> WARN only
+
+
+def innovation_ratios(msg) -> tuple[float | None, float | None]:
+    """(worst velocity/position/height test ratio, compass test ratio) from ESTIMATOR_STATUS. Non-finite values (no
+    rangefinder -> hagl_ratio NaN) are skipped, not left to how max() treats NaN."""
+    nav = [v for v in (getattr(msg, f, None) for f in INNOVATION_FIELDS) if v is not None and math.isfinite(v)]
+    mag = getattr(msg, MAG_INNOVATION_FIELD, None)
+    return (max(nav) if nav else None), (mag if mag is not None and math.isfinite(mag) else None)
 
 
 def statustext_of(msg) -> str:
@@ -1231,8 +1239,8 @@ class Guard:
         elif kind == "GLOBAL_POSITION_INT" and not self._seen_landed_state:
             self.airborne = (msg.relative_alt / 1000.0) > 1.0
         elif kind == "ESTIMATOR_STATUS":
-            worst = max((getattr(msg, f, 0.0) or 0.0) for f in INNOVATION_FIELDS)
-            self.wd.estimator(bool(msg.flags & ESTIMATOR_ATTITUDE_FLAG), worst, now)
+            worst, mag = innovation_ratios(msg)
+            self.wd.estimator(bool(msg.flags & ESTIMATOR_ATTITUDE_FLAG), worst, now, mag)
 
     def _note_kill(self, text: str) -> None:
         """The pilot hit the kill switch. Same answer as any takeover: hands off."""

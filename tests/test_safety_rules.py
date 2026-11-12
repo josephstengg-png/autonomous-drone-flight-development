@@ -212,3 +212,30 @@ def test_one_innovation_spike_on_a_slow_link_never_lands():
     wd.estimator(attitude_ok=True, worst_innovation=1.3, now=6.0)     # confirmed 5 s later: a trend
     wd.heartbeat(6.1)
     assert wd.evaluate(6.1).action == LAND
+
+from artex.agent import drone_agent as AGENT  # noqa: E402
+
+
+def test_a_compass_only_innovation_failure_warns_and_never_lands():
+    """Operator's decision, 13 Nov 2026: SITL survey corners took mag_ratio to 1.37-1.39 and landed an aircraft from 30 m."""
+    wd = sr.Watchdog()
+    for t in range(1, 12):
+        wd.heartbeat(float(t))
+        wd.estimator(attitude_ok=True, worst_innovation=0.1, now=float(t), mag_ratio=1.4)
+    v = wd.evaluate(11.0)
+    assert v.action == sr.WARN and any("compass" in r for r in v.reasons)
+
+
+def test_a_sustained_velocity_innovation_failure_still_lands():
+    wd = sr.Watchdog()
+    for t in range(1, 7):
+        wd.heartbeat(float(t))
+        wd.estimator(attitude_ok=True, worst_innovation=1.4, now=float(t), mag_ratio=0.1)
+    assert wd.evaluate(6.0).action == sr.LAND
+
+
+def test_innovation_ratios_split_the_compass_and_skip_nan():
+    from types import SimpleNamespace
+    msg = SimpleNamespace(vel_ratio=0.2, pos_horiz_ratio=0.1, pos_vert_ratio=0.05, hagl_ratio=float("nan"), mag_ratio=1.3)
+    assert AGENT.innovation_ratios(msg) == (0.2, 1.3)
+    assert AGENT.innovation_ratios(SimpleNamespace(hagl_ratio=float("nan"), mag_ratio=float("nan"))) == (None, None)

@@ -126,6 +126,8 @@ class Watchdog:
         self._attitude_lost = False
         self._innovation_since: float | None = None
         self._innovation_last: float | None = None    # the latest sample that still failed
+        self._mag_since: float | None = None          # compass innovation: WARN only (13 Nov 2026)
+        self._mag_last: float | None = None
         self._manual: tuple[str, str] | None = None
         self._armed: bool | None = None
         self._airborne: bool | None = None
@@ -165,7 +167,18 @@ class Watchdog:
         self._tilt_deg = max(abs(roll_deg), abs(pitch_deg))
 
     def estimator(self, attitude_ok: bool, worst_innovation: float | None,
-                  now: float) -> None:
+                  now: float, mag_ratio: float | None = None) -> None:
+        """worst_innovation: the worst velocity/position/height test ratio (sustained -> LAND). mag_ratio: the compass
+        test ratio, kept apart: sustained it only WARNs. Operator's decision, 13 Nov 2026, after SITL survey corners took
+        mag_ratio to 1.37-1.39 and landed an aircraft from 30 m twice; PX4 itself just rejects those compass samples and
+        keeps navigating on GPS."""
+        if mag_ratio is not None:
+            if mag_ratio > self.limits.innovation_ratio:
+                if self._mag_since is None:
+                    self._mag_since = now
+                self._mag_last = now
+            else:
+                self._mag_since = self._mag_last = None
         if not attitude_ok:
             self._attitude_lost = True
         if worst_innovation is None:
@@ -269,6 +282,12 @@ class Watchdog:
             held = self._innovation_last - self._innovation_since
             if held >= lim.innovation_sustain_s:
                 found.append((LAND, f"innovation test failing for {held:.1f}s"))
+
+        if self._mag_since is not None:
+            held = self._mag_last - self._mag_since
+            if held >= lim.innovation_sustain_s:
+                found.append((WARN, f"compass innovation failing for {held:.1f}s (PX4 rejects those compass samples; "
+                                    f"navigation continues on GPS)"))
 
         if self._manual:
             action, reason = self._manual
