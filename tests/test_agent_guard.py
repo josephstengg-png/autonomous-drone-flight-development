@@ -399,3 +399,41 @@ def test_a_kill_is_not_a_handback(tmp_path):
     g.observe(_mode_hb(2))
     g.observe(_mode_hb(6))
     assert g.handback_requests == 0
+
+
+def test_messages_read_by_command_handlers_still_reach_the_guard():
+    """12 Nov 2026 (SITL): ARM/START read the heartbeats themselves; the guard saw a gap and held both aircraft."""
+    from artex.agent.drone_agent import observe_every_message
+
+    class Link:
+        def __init__(self, msgs):
+            self.msgs = list(msgs)
+
+        def recv_msg(self):
+            return self.msgs.pop(0) if self.msgs else None
+
+        def recv_match(self, type=None, blocking=False, timeout=None):   # the shape pymavlink's has: reads via recv_msg
+            while True:
+                m = self.recv_msg()
+                if m is None or type is None or m in (type if isinstance(type, list) else [type]):
+                    return m
+
+    seen = []
+
+    class G:
+        def observe(self, m):
+            seen.append(m)
+
+    link = Link(["HEARTBEAT", "HEARTBEAT", "COMMAND_ACK"])
+    observe_every_message(link, G())
+    assert link.recv_match(type="COMMAND_ACK") == "COMMAND_ACK"     # a handler waiting for its ACK
+    assert seen == ["HEARTBEAT", "HEARTBEAT", "COMMAND_ACK"]          # the heartbeats it skipped still reached the guard
+
+
+def test_mission_guard_ceiling_sits_above_the_plan():
+    """12 Nov 2026 (SITL): the resident agent kept the indoor 2.0 m ceiling and landed both aircraft at 2 m."""
+    from types import SimpleNamespace
+    from artex.agent.drone_agent import MISSION_CEILING_MARGIN_M, mission_ceiling
+    assert mission_ceiling(SimpleNamespace(ceiling_m=None), 32.0) == 32.0 + MISSION_CEILING_MARGIN_M
+    assert mission_ceiling(SimpleNamespace(ceiling_m=2.0), 30.0) == 30.0 + MISSION_CEILING_MARGIN_M   # never below
+    assert mission_ceiling(SimpleNamespace(ceiling_m=60.0), 30.0) == 60.0

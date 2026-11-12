@@ -434,6 +434,48 @@ def run_token(run_id: str, plan_path: Path) -> str:
     return f"{run_id}:{digest}"
 
 
+def flight_passed(result: dict, stage: str) -> bool:
+    """A takeover-ladder stage passes when the pilot took over AT it. The full flight (stage disarm) also passes when it
+    took off, hovered, landed and PX4 disarmed it with no guard action (12 Nov 2026, SITL: a flawless full flight was
+    recorded as failed; the demo agent already counted it as a pass)."""
+    if result.get("safety"):
+        return False
+    if result.get("outcome") == "takeover":
+        return result.get("takeover_stage") == stage and result.get("takeover_source") in ("pilot_switch", "kill_switch")
+    return stage == "disarm" and result.get("outcome") == "landed_px4_disarmed"
+
+
+MISSION_CEILING_MARGIN_M = 5.0
+
+
+def mission_ceiling(args, top_alt: float) -> float:
+    """The guard's height ceiling for a waypoint mission: the plan's top altitude plus a margin, unless set explicitly.
+
+    12 Nov 2026, found in SITL: the resident agent kept the guard's indoor default of 2.0 m, so both aircraft were told
+    to LAND at 2 m on the way up to a 30 m survey. An explicit --ceiling-m below the mission is raised, never trusted:
+    it would land every aircraft on its climb."""
+    floor = top_alt + MISSION_CEILING_MARGIN_M
+    asked = getattr(args, "ceiling_m", None)
+    return floor if asked is None or asked < floor else asked
+
+
+def observe_every_message(conn, guard) -> None:
+    """Route every message the link receives through the guard, whoever reads it.
+
+    12 Nov 2026, found in SITL: the ARM and START handlers hold the link for seconds and read the heartbeats themselves.
+    The guard, fed only by its monitor thread, then saw a 6.6 s heartbeat gap the moment START returned and put both
+    aircraft in HOLD on the ground. pymavlink's recv_match reads through recv_msg, so hooking recv_msg covers every
+    reader, including the type-filtered waits that discard what they do not match."""
+    read = conn.recv_msg
+
+    def recv_msg():
+        msg = read()
+        if msg is not None:
+            guard.observe(msg)
+        return msg
+    conn.recv_msg = recv_msg
+
+
 def resident_loop(conn, args, token: str) -> int:
     """Hold the link and take commands on stdin until told to stop.
 
@@ -448,15 +490,15 @@ def resident_loop(conn, args, token: str) -> int:
     # below runs under this lock, and the monitor only reads while holding it, so there is
     # exactly one reader at any instant.
     conn_lock = threading.Lock()
+    if guard.enabled:
+        observe_every_message(conn, guard)
 
     def monitor():
         while True:
             time.sleep(0.2)
             with conn_lock:
-                msg = conn.recv_match(blocking=False)
-                while msg is not None:
-                    guard.observe(msg)
-                    msg = conn.recv_match(blocking=False)
+                while conn.recv_match(blocking=False) is not None:     # each one reaches the guard via recv_msg
+                    pass
                 acted = guard.check()
             if acted:
                 state["failsafe_armed"] = False
@@ -662,6 +704,8 @@ def cmd_prepare(args) -> int:
             for _ in range(3):             # the uplink drops commands; three passes
                 send_downlink(conn, downlink_commands(profile), 0.12)
                 time.sleep(1.0)
+        args.ceiling_m = mission_ceiling(args, top_alt)
+        log(f"[safety] guard ceiling {args.ceiling_m:g} m (mission tops out at {top_alt:g} m)")
         try:
             return resident_loop(conn, args, token)
         finally:
@@ -2095,9 +2139,7 @@ def cmd_offboard_flight(args) -> int:
             except Exception as exc:       # a dead link here must never cost the result (29 Oct: trace lost that way)
                 result["stale_arm"] = dict(error=f"{type(exc).__name__}: {exc}")
         result["rx_msgs_per_s"] = round(sum(rx.values()) / max(time.time() - t_start, 1.0), 1)
-        result["passed"] = (result["outcome"] == "takeover" and result["takeover_stage"] == stage
-                            and result["takeover_source"] in ("pilot_switch", "kill_switch")
-                            and not result.get("safety"))
+        result["passed"] = flight_passed(result, stage)
         emit(result)
         if feed_asked["on"]:
             try:

@@ -36,7 +36,7 @@ from artex.console import sessions  # noqa: E402
 from artex.assistant import agent as assistant  # noqa: E402
 from artex.assistant.llm import OllamaChat  # noqa: E402
 from artex.assistant import actions as assistant_actions  # noqa: E402
-from artex.fleetops.swarm_deploy import host_argv, push as push_plan  # noqa: E402
+from artex.fleetops.swarm_deploy import LOCAL_HOSTS, host_argv, push as push_plan  # noqa: E402
 from artex.common import layout, version  # noqa: E402
 
 ROOT = core.ROOT
@@ -48,6 +48,14 @@ MIME = {".js": "application/javascript", ".css": "text/css", ".png": "image/png"
 GATE_S = 150          # drone_agent --gate-timeout-s: how long READY waits for the operator's ARM
 SEND_WORDS = {"ARM", "ABORT", "LAND", "HOLD"}
 DEMO_WORDS = {"DEMO_TAKEOVER", "DEMO_KILL"}
+
+
+def agent_command(host: str, argv: list[str]) -> tuple[list[str], str]:
+    """How to start an agent for an aircraft: over ssh on its companion, or here for a simulator (host local)."""
+    cmd, cwd = host_argv(dict(host=host, remote_dir=layout.REMOTE_DIR), argv)
+    if cmd[0] == "ssh":
+        cmd[1:1] = ["-o", "ConnectTimeout=8"]
+    return cmd, cwd or str(ROOT)
 
 
 class Run:
@@ -73,11 +81,10 @@ class Run:
             cmd = [sys.executable, str(DEMO / "fake_agent.py")] + self.argv[len(layout.AGENT):]
         else:
             ac = core.AIRCRAFT[self.rec["profile"]["sysid"]]
-            cmd, _ = host_argv(dict(host=ac["host"], remote_dir=layout.REMOTE_DIR), self.argv)
-            cmd[1:1] = ["-o", "ConnectTimeout=8"]
+            cmd, cwd = agent_command(ac["host"], self.argv)
         self.rec["command"] = cmd
         self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                     text=True, bufsize=1, cwd=str(ROOT))
+                                     text=True, bufsize=1, cwd=cwd if not self.demo else str(ROOT))
         threading.Thread(target=self._read, args=(self.proc.stdout, "event"), daemon=True).start()
         threading.Thread(target=self._read, args=(self.proc.stderr, "log"), daemon=True).start()
         threading.Thread(target=self._wait, daemon=True).start()
@@ -299,11 +306,10 @@ class Member:
         if demo:
             cmd = [sys.executable, str(DEMO / "fake_resident_agent.py")] + self.argv[len(layout.AGENT):]
         else:
-            cmd, _ = host_argv(dict(host=core.AIRCRAFT[self.sysid]["host"], remote_dir=layout.REMOTE_DIR), self.argv)
-            cmd[1:1] = ["-o", "ConnectTimeout=8"]
+            cmd, cwd = agent_command(core.AIRCRAFT[self.sysid]["host"], self.argv)
         self.run.rec.setdefault("commands", {})[str(self.sysid)] = cmd
         self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                     text=True, bufsize=1, cwd=str(ROOT))
+                                     text=True, bufsize=1, cwd=cwd if not demo else str(ROOT))
         threading.Thread(target=self._out, daemon=True).start()
         threading.Thread(target=self._err, daemon=True).start()
 
@@ -390,6 +396,10 @@ class FleetRun:
             src = ev.get("source")
             self.mark_fault(m, "the pilot took over" if src in (None, "pilot_switch", "kill_switch")
                             else f"left the mission ({src})")
+        # 12 Nov 2026 (SITL): the guard landed both aircraft at 2 m and the run was reported "completed".
+        own = [r for r in ev.get("reasons") or [] if not str(r).startswith("operator:")]   # not an order relayed by the guard
+        if ev.get("event") == "safety" and m.v["started"] and own and ev.get("action") in ("hold", "land", "disarm", "cut"):
+            self.mark_fault(m, f"the companion's guard commanded {str(ev.get('action')).upper()}: " + "; ".join(own))
 
     def mark_fault(self, m: Member, why: str) -> None:
         """First fault on an aircraft after START: flag it and put every other flying aircraft in HOLD."""
@@ -569,8 +579,7 @@ class FleetRun:
                 r = m.await_verb("status", 10.0)
                 if r:
                     prev = m.v["status"] or {}
-                    r["_was_rtl"] = prev.get("_was_rtl") or (r.get("main_mode") == fleet.PX4_MAIN_AUTO
-                                                             and r.get("sub_mode") in (5, 6))
+                    r["_was_rtl"] = prev.get("_was_rtl") or fleet.reached_mission_end(r, m.v["items"], bool(m.v["held"]))
                     m.v.update(status=r, misses=0)
                 else:
                     m.v["misses"] += 1
@@ -761,6 +770,8 @@ class App:
     # ---- version handshake: never drive a companion running different agent code -----------
     def remote_version(self, sysid: int) -> dict | None:
         host = core.AIRCRAFT[sysid]["host"]
+        if host in LOCAL_HOSTS:
+            return version.report()          # the agent runs from this very code
         try:
             r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", host,
                                 f"cd {layout.REMOTE_DIR} && python3 -m artex.common.version"],
@@ -1152,7 +1163,7 @@ def main() -> int:
     layout.ensure_data()
     app = App(a.demo, require_signin=not a.no_signin)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(app))
-    print(f"[gs] {'DEMO (simulated aircraft)' if a.demo else 'LIVE (real aircraft over ssh)'} -- "
+    print(f"[gs] {'DEMO (simulated aircraft)' if a.demo else 'SIMULATED aircraft (PX4 SITL on this machine)' if all(ac.get('sim') for ac in core.AIRCRAFT.values()) else 'LIVE (real aircraft over ssh)'} -- "
           f"http://127.0.0.1:{a.port}", file=sys.stderr, flush=True)
     try:
         srv.serve_forever()

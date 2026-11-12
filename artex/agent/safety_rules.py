@@ -125,6 +125,7 @@ class Watchdog:
         self._tilt_deg: float | None = None
         self._attitude_lost = False
         self._innovation_since: float | None = None
+        self._innovation_last: float | None = None    # the latest sample that still failed
         self._manual: tuple[str, str] | None = None
         self._armed: bool | None = None
         self._airborne: bool | None = None
@@ -172,8 +173,9 @@ class Watchdog:
         if worst_innovation > self.limits.innovation_ratio:
             if self._innovation_since is None:
                 self._innovation_since = now
+            self._innovation_last = now
         else:
-            self._innovation_since = None
+            self._innovation_since = self._innovation_last = None
 
     def armed(self, armed: bool, now: float) -> None:
         if armed and self._armed is False:
@@ -262,7 +264,9 @@ class Watchdog:
             found.append((LAND, "estimator lost the attitude solution"))
 
         if self._innovation_since is not None:
-            held = now - self._innovation_since
+            # Measured between failing SAMPLES, never up to `now` (12 Nov 2026, SITL): with the lean mission downlink the
+            # estimator reports every 5 s, and one spike used to become "failing for 3.0s" with nothing confirming it.
+            held = self._innovation_last - self._innovation_since
             if held >= lim.innovation_sustain_s:
                 found.append((LAND, f"innovation test failing for {held:.1f}s"))
 

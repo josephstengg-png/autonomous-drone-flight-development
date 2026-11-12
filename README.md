@@ -12,7 +12,7 @@ Laptop (console, planner, assistant)  --ssh-->  Jetson per aircraft (agent, rela
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,plot]"
 .venv/bin/python -m artex.console.gs_server --demo        # open http://127.0.0.1:8787
-.venv/bin/python -m pytest -q                              # 460 tests
+.venv/bin/python -m pytest -q                              # 474 tests
 ```
 
 ## Layout
@@ -49,6 +49,7 @@ Then follow [docs/install.md](docs/install.md) on the laptop and on each Jetson.
 | [Safety manual](docs/safety-manual.md) | authority order, what the console guarantees, hazard analysis, known limits |
 | [Install](docs/install.md) | laptop, companions, site configuration, the assistant's model |
 | [API](docs/api.md) | every console route and the role it needs |
+| [Simulation](docs/simulation.md) | the whole flow against PX4 SITL + Gazebo; what the first run found |
 | [Architecture](docs/architecture.md) | design and phase history, evaluation results |
 | [Licence notices](LICENSE-NOTICES.md) | third-party components and imagery |
 

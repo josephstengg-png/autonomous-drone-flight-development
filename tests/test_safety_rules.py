@@ -199,3 +199,16 @@ def test_the_lower_rungs_pass_through_untouched():
     for a in (sr.NONE, sr.WARN, sr.HOLD):
         for air in (True, False, None):
             assert sr.on_ground_action(a, air) == a
+
+
+def test_one_innovation_spike_on_a_slow_link_never_lands():
+    """12 Nov 2026 (SITL): ESTIMATOR_STATUS at 0.2 Hz; one spike, then 3 s of silence, landed the aircraft."""
+    from artex.agent.safety_rules import LAND, Watchdog
+    wd = Watchdog()
+    wd.estimator(attitude_ok=True, worst_innovation=1.4, now=1.0)     # one failing sample, then nothing for 5 s
+    for t in (2.0, 3.0, 4.0, 4.5, 5.5):
+        wd.heartbeat(t)
+        assert wd.evaluate(t).action != LAND, t
+    wd.estimator(attitude_ok=True, worst_innovation=1.3, now=6.0)     # confirmed 5 s later: a trend
+    wd.heartbeat(6.1)
+    assert wd.evaluate(6.1).action == LAND

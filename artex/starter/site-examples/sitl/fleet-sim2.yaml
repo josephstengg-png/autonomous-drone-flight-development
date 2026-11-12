@@ -1,0 +1,7 @@
+# PX4 SITL instance 1 on this laptop (sysid 2)
+drones:
+  - slot: 2
+    sysid: 2
+    host: local
+    sim: true
+    link: "udpin://:14541"

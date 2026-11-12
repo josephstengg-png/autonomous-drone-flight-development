@@ -1,0 +1,16 @@
+# SITL site: two PX4 SITL x500s in Docker on this laptop (artex-sitl container, world ubin). Not real aircraft.
+aircraft:
+  1:
+    host: local
+    radio: "udpin://:14540"
+    usb: "udpin://:14540"
+    fleet: fleet-sim1.yaml
+    hover: 0.6
+    sim: true
+  2:
+    host: local
+    radio: "udpin://:14541"
+    usb: "udpin://:14541"
+    fleet: fleet-sim2.yaml
+    hover: 0.6
+    sim: true

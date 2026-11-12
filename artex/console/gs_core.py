@@ -26,6 +26,7 @@ from pathlib import Path
 from artex.common.layout import DATA as ROOT  # noqa: E402  (the data root: the checkout, or ARTEX_HOME)
 from artex.agent import offboard_control as oc  # noqa: E402
 from artex.common import layout  # noqa: E402
+LOCAL_HOSTS = {"local", "localhost", None, ""}  # aircraft on this machine (simulators)
 
 PROFILE_DIR = ROOT / "profiles"
 RUN_DIR = ROOT / "runs"
@@ -144,7 +145,7 @@ def validate(p: dict) -> list[str]:
         if p["flight_type"] != "bench":
             e.append("Several aircraft at once is a props-OFF bench test only (operator's decision, 10 Nov 2026). "
                      "Fly them one at a time, or use the Fleet page for waypoint missions.")
-        hosts = [AIRCRAFT[s]["host"] for s in p["sysids"] if s in AIRCRAFT]
+        hosts = [AIRCRAFT[s]["host"] for s in p["sysids"] if s in AIRCRAFT and AIRCRAFT[s]["host"] not in LOCAL_HOSTS]
         if len(set(hosts)) != len(hosts):
             e.append("Two aircraft on one companion: each Jetson holds one aircraft's link.")
     if p["link"] not in ("radio", "usb"):

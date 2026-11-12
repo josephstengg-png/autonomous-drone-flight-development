@@ -133,7 +133,8 @@ def validate(p: dict) -> list[str]:
             e.append(f"ARTEX{m['sysid']}: link must be radio or usb.")
         if not plan_ok(m["plan"]):
             e.append(f"ARTEX{m['sysid']}: choose a plan from missions/ (missions/<site>/mission_drones/drone-N.plan).")
-    hosts = [core.AIRCRAFT[m["sysid"]]["host"] for m in ac if m["sysid"] in core.AIRCRAFT]
+    hosts = [core.AIRCRAFT[m["sysid"]]["host"] for m in ac
+             if m["sysid"] in core.AIRCRAFT and core.AIRCRAFT[m["sysid"]]["host"] not in core.LOCAL_HOSTS]
     if len(set(hosts)) != len(hosts):
         e.append("Two aircraft on one companion: each Jetson holds one aircraft's link.")
     plans = [m["plan"] for m in ac]
@@ -253,9 +254,15 @@ def assess(p: dict, ctx: dict) -> list[dict]:
         add("separation", "accept", "Separation is only what the planner guaranteed",
             "There is no runtime collision avoidance. The planner stacks the aircraft in altitude layers and checked "
             "the plans together; a takeover or a HOLD can bring two aircraft closer than planned.")
-        add("link_load", "accept", "The radio carries PX4's full default telemetry",
-            "About 80-86 % of the ELRS telemetry capacity. Commands (HOLD, RTL) arrive in ~1 s, sometimes several. "
-            "A lean outdoor downlink profile is not built yet.")
+        if p["downlink"] == "mission":
+            add("link_load", "accept", "The radio carries the lean mission downlink",
+                "About 22 % of the ELRS telemetry capacity (estimated: position at 2 Hz, everything the agent does not "
+                "read switched off; restored at the end). Not yet measured on the radio (artex.diagnostics.link_sweep). "
+                "QGroundControl on the same link sees far less than usual.")
+        else:
+            add("link_load", "accept", "The radio carries PX4's full default telemetry",
+                "About 80-86 % of the ELRS telemetry capacity. Commands (HOLD, RTL) arrive in ~1 s, sometimes several. "
+                "Choose the mission downlink to cut it to about 22 %.")
     if p["mode"] in ("arm", "mission") and props_on:
         add("motors", "accept", "Several aircraft armed at once with props on",
             "ARM ALL spins every set of props within a couple of seconds. The pilots' kill switches are the stop.")
@@ -310,6 +317,16 @@ def describe_mode(main: int | None, sub: int | None) -> str:
     if main == PX4_MAIN_AUTO:
         return "AUTO " + PX4_SUB.get(sub, str(sub))
     return PX4_MAIN.get(main, str(main))
+
+
+def reached_mission_end(st: dict, items: int | None, held: bool = False) -> bool:
+    """The aircraft is in RTL or LAND because its MISSION got there (the plan's last item), not because a guard, a PX4
+    failsafe or anything else sent it home early. 12 Nov 2026 (SITL): a guard LAND at waypoint 1 used to count as
+    'mission complete'."""
+    in_rtl_or_land = st.get("main_mode") == PX4_MAIN_AUTO and st.get("sub_mode") in (5, 6)
+    if held:          # the console or the operator held it (HOLD/RTL/LAND): going home is the ordered ending
+        return in_rtl_or_land
+    return bool(in_rtl_or_land and items and (st.get("waypoint") or 0) >= items - 1)
 
 
 def member_fault(st: dict | None, items: int | None, misses: int) -> str | None:

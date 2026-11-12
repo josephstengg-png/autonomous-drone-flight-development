@@ -52,7 +52,7 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-from artex.common.layout import AGENT, REMOTE_DIR  # noqa: E402
+from artex.common.layout import AGENT, DATA, REMOTE_DIR  # noqa: E402
 PREPARE_TIMEOUT_S = 180.0
 START_TIMEOUT_S = 60.0
 UPLOAD_TIMEOUT_S = 900.0      # upload + read-back; ~1 s/item each way over ELRS
@@ -103,7 +103,9 @@ def host_argv(drone: dict, argv: list[str]) -> tuple[list[str], str | None]:
     """The command to run an agent verb where this drone's agent lives, and its cwd."""
     host = drone.get("host", "local")
     if host in LOCAL_HOSTS:
-        return argv, str(ROOT)
+        # An aircraft on this machine (a simulator): this interpreter, not whatever `python3` is on PATH, and the data
+        # folder as cwd, because plans and the ABORT flag are relative to it.
+        return ([sys.executable, *argv[1:]] if argv and argv[0] == "python3" else argv), str(DATA)
     remote = drone.get("remote_dir", REMOTE_DIR)
     inner = " ".join(shlex.quote(a) for a in argv)
     return (["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",

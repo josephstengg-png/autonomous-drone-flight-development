@@ -106,7 +106,7 @@ def relay_floor_s() -> float:
     return 0.0
 
 
-def vehicle(link: str, sysid: int) -> dict:
+def vehicle(link: str, sysid: int, check_sim: bool = False) -> dict:
     """Heartbeat, arm state, GPS quality and home, judged against the EKF's gates."""
     from artex.agent import drone_agent as agent
 
@@ -118,6 +118,9 @@ def vehicle(link: str, sysid: int) -> dict:
         return out
     out["reachable"] = True
     out["sysid"] = conn.target_system
+    if check_sim:
+        # Declared a simulator: prove it. Only PX4 SITL under Gazebo has SIM_GZ_EN.
+        out["simulator"] = agent.read_param(conn, "SIM_GZ_EN") is not None
 
     conn.mav.command_long_send(conn.target_system, 1, 512, 0, 242, 0, 0, 0, 0, 0, 0)
     seen = {}
@@ -178,10 +181,18 @@ def main() -> int:
     ap.add_argument("sysid", type=int)
     ap.add_argument("--link", default="udpout://127.0.0.1:14540")
     ap.add_argument("--abort-flag", default="ABORT")
+    ap.add_argument("--sim", action="store_true",
+                    help="the aircraft is PX4 SITL on this machine: no radio chain to check; prove it is a simulator")
     ap.add_argument("--no-vehicle", action="store_true",
                     help="companion checks only; do not open a MAVLink session")
     args = ap.parse_args()
 
+    if args.sim:
+        report = {"host": sh("hostname").strip(), "simulated": True, "clock_sane": True,
+                  "abort_flag": Path(args.abort_flag).read_text().strip() if Path(args.abort_flag).exists() else None,
+                  "vehicle": {"skipped": True} if args.no_vehicle else vehicle(args.link, args.sysid, check_sim=True)}
+        print(json.dumps(report))
+        return 0
     report = {
         "host": sh("hostname").strip(),
         "clock_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

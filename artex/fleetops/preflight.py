@@ -101,6 +101,8 @@ def probe(drone: dict, no_vehicle: bool, timeout: float) -> dict:
                        capture_output=True, timeout=60)
     argv = ["python3", "-m", "artex.fleetops.preflight_probe", str(drone["sysid"]),
             "--link", drone["link"]]
+    if drone.get("sim"):
+        argv.append("--sim")
     if no_vehicle:
         argv.append("--no-vehicle")
     cmd, cwd = host_argv(drone, argv)
@@ -128,6 +130,15 @@ def assess(drone: dict, ground: dict, p: dict) -> tuple[list, list]:
     if p.get("error"):
         bad.append(f"companion probe failed: {p['error']}")
         return bad, warn
+    if drone.get("sim"):
+        # A simulated aircraft has no radio chain; everything about the vehicle below still applies, and it must
+        # PROVE it is a simulator -- a real aircraft wrongly marked sim must never skip the radio checks.
+        if p.get("abort_flag") is not None:
+            bad.append(f"stale ABORT flag set ({p['abort_flag']!r})")
+        v = p.get("vehicle", {})
+        if v.get("reachable") and v.get("simulator") is not True:
+            bad.append("marked as a simulator, but the vehicle has no SIM_GZ_EN: it may be a REAL aircraft")
+        return _vehicle_checks(sysid, v, bad, warn)
 
     w = p.get("wifi", {})
     if not w.get("associated"):
@@ -172,7 +183,10 @@ def assess(drone: dict, ground: dict, p: dict) -> tuple[list, list]:
         warn.append(f"companion clock is wrong ({p.get('clock_utc')}) -- timestamps and "
                     f"any cross-aircraft timing will be meaningless")
 
-    v = p.get("vehicle", {})
+    return _vehicle_checks(sysid, p.get("vehicle", {}), bad, warn)
+
+
+def _vehicle_checks(sysid: int, v: dict, bad: list, warn: list) -> tuple[list, list]:
     if v.get("skipped"):
         warn.append("vehicle checks skipped (--no-vehicle)")
         return bad, warn

@@ -455,3 +455,13 @@ def test_a_switch_that_was_already_off_is_not_a_pilot_takeover():
     assert sr.classify_mode_exit([1000], 1500, [1500], offb_pwm_before=2000) == "pilot_switch"     # dropped from on to off
     assert sr.classify_mode_exit([1000], 1500, [1500], offb_pwm_before=None) == "pilot_switch"     # unknown: old behaviour
     assert sr.classify_mode_exit([1000], 1500, [1990], offb_pwm_before=1000) == "pilot_switch"     # ch7 still counts
+
+
+def test_a_clean_full_flight_passes_and_nothing_else_is_loosened():
+    from artex.agent.drone_agent import flight_passed
+    assert flight_passed(dict(outcome="landed_px4_disarmed"), "disarm")
+    assert not flight_passed(dict(outcome="landed_px4_disarmed", safety=[{"action": "land"}]), "disarm")
+    assert not flight_passed(dict(outcome="landed_px4_disarmed"), "hold")       # a ladder stage still needs the takeover
+    assert not flight_passed(dict(outcome="landed_still_armed"), "disarm")
+    assert flight_passed(dict(outcome="takeover", takeover_stage="hold", takeover_source="pilot_switch"), "hold")
+    assert not flight_passed(dict(outcome="takeover", takeover_stage="takeoff", takeover_source="pilot_switch"), "hold")

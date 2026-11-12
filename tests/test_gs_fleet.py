@@ -212,3 +212,30 @@ def test_upload_mode_never_arms_and_a_single_run_cannot_start_meanwhile(gs):
     r = wait(gs, ("done", "ended"))
     assert r["result"]["outcome"] == "missions uploaded and verified"
     assert not any(x["armed"] for x in r["members"])
+
+
+def test_an_early_land_is_not_a_finished_mission():
+    """12 Nov 2026 (SITL): a guard LAND at waypoint 1, then disarm, was reported as 'every aircraft completed'."""
+    early = dict(armed=True, main_mode=fleet.PX4_MAIN_AUTO, sub_mode=6, waypoint=1)
+    assert not fleet.reached_mission_end(early, 11)
+    st = dict(armed=False, waypoint=1, _was_rtl=fleet.reached_mission_end(early, 11))
+    assert "mid-mission" in fleet.member_fault(st, 11, 0)
+    end = dict(armed=True, main_mode=fleet.PX4_MAIN_AUTO, sub_mode=5, waypoint=10)
+    assert fleet.reached_mission_end(end, 11)
+    assert fleet.member_fault(dict(armed=False, waypoint=10, _was_rtl=True), 11, 0) is None
+
+
+def test_guard_actions_fault_the_aircraft_but_relayed_operator_orders_do_not():
+    from artex.console.gs_server import FleetRun
+    marked = []
+
+    class Fake:
+        push = lambda self, *a, **k: None
+        mark_fault = lambda self, m, why: marked.append((m.sysid, why))
+
+    class M:
+        sysid, v = 1, dict(started=True)
+    FleetRun.on_event(Fake(), M(), dict(event="safety", action="hold", reasons=["operator: operator said HOLD"]))
+    assert marked == []
+    FleetRun.on_event(Fake(), M(), dict(event="safety", action="land", reasons=["innovation test failing for 5.0s"]))
+    assert marked and "LAND" in marked[0][1]
