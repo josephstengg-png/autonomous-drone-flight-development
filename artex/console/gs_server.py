@@ -262,6 +262,21 @@ class GroupRun:
                     speed=float(os.environ.get("DEMO_SPEED", "4")) if self.demo else 1.0)
 
 
+# Who may call what, when the console requires sign-in (the product default; tests and lab use may switch it off).
+# Stopping is open to every signed-in role: anyone in the room who sees danger must be able to stop the aircraft.
+ROUTE_ROLE = {
+    "/api/session/signin": None, "/api/session/first_operator": None, "/api/session/signout": "observer",
+    "/api/assistant/ask": "observer", "/api/run/word": "observer", "/api/fleet/word": "observer",
+    "/api/fleet/cancel": "observer", "/api/run/abort_flag": "observer", "/api/fleet/abort_flag": "observer",
+    "/api/profiles/preview": "observer", "/api/fleet/preview": "observer",
+    "/api/session/add_operator": "admin",
+}
+
+
+def route_role(path: str) -> str | None:
+    return ROUTE_ROLE.get(path, "operator")
+
+
 FLEET_WORDS = {"HOLD": "HOLD", "RTL": "ABORT rtl", "LAND": "ABORT land"}
 FLEET_DEMO_WORDS = {"DEMO_TAKEOVER", "DEMO_LINK"}
 PREPARE_TIMEOUT_S = 240.0     # upload + read-back + contract over the radio (~1 s per item)
@@ -620,8 +635,9 @@ class FleetRun:
 
 
 class App:
-    def __init__(self, demo: bool):
+    def __init__(self, demo: bool, require_signin: bool = False):
         self.demo = demo
+        self.require_signin = require_signin       # the product runs with True (artex-console); tests and lab use False
         self.tokens = core.Tokens()
         self.run: Run | None = None
         self.fleet: FleetRun | None = None
@@ -905,7 +921,8 @@ def make_handler(app: App):
             if u.path == "/api/session":
                 ses = app.sessions.get(self.headers.get("X-GS-Session"))
                 return self._send(200, dict(signed_in=bool(ses), has_operators=sessions.has_operators(),
-                                            operator=ses and ses["operator"], pilots=ses and ses["pilots"]))
+                                            operator=ses and ses["operator"], pilots=ses and ses["pilots"],
+                                            role=ses and ses.get("role"), require_signin=app.require_signin))
             if u.path == "/api/assistant/status":
                 return self._send(200, dict(app.llm.status(), phase="C",
                                             delegation_available=app.demo or assistant_actions.live_allowed()))
@@ -924,6 +941,13 @@ def make_handler(app: App):
             if not self._guard(True):
                 return
             u, b = urlparse(self.path), self._body()
+            if app.require_signin:
+                need = route_role(u.path)
+                ses = app.sessions.get(self.headers.get("X-GS-Session"))
+                if not sessions.allowed(ses, need):
+                    return self._send(401 if not ses else 403,
+                                      dict(error="Sign in first." if not ses else
+                                           f"Your role ({ses.get('role')}) cannot do this; it needs {need}."))
             try:
                 return self._post(u.path, b)
             except (KeyError, ValueError, TypeError) as exc:
@@ -1026,8 +1050,8 @@ def make_handler(app: App):
             if path == "/api/session/first_operator":
                 if sessions.has_operators():
                     return self._send(403, dict(error="Operators exist already: sign in."))
-                sessions.add_operator(str(b.get("name", "")), str(b.get("pin", "")))
-                return self._send(200, dict(token=app.sessions.open(str(b["name"]).strip())))
+                sessions.add_operator(str(b.get("name", "")), str(b.get("pin", "")), role="admin")
+                return self._send(200, dict(token=app.sessions.open(str(b["name"]).strip(), role="admin")))
             if path == "/api/session/signin":
                 name = str(b.get("name", "")).strip().lower()
                 fails = [t for t in app.pin_fails.get(name, []) if time.time() - t < 60]
@@ -1038,14 +1062,16 @@ def make_handler(app: App):
                     app.pin_fails[name] = fails + [time.time()]
                     return self._send(403, dict(error="Name or PIN not recognised."))
                 app.pin_fails.pop(name, None)
-                return self._send(200, dict(token=app.sessions.open(who)))
+                return self._send(200, dict(token=app.sessions.open(who, role=sessions.role_of(who))))
             if not ses:
                 return self._send(401, dict(error="Sign in first."))
             if path == "/api/session/signout":
                 app.sessions.close(tok)
                 return self._send(200, dict(ok=True))
             if path == "/api/session/add_operator":
-                sessions.add_operator(str(b.get("name", "")), str(b.get("pin", "")))
+                if not sessions.allowed(ses, "admin"):
+                    return self._send(403, dict(error="Only an admin adds operators."))
+                sessions.add_operator(str(b.get("name", "")), str(b.get("pin", "")), role=str(b.get("role", "operator")))
                 return self._send(200, dict(ok=True))
             if path == "/api/session/crew":
                 return self._send(200, dict(pilots=sessions.Sessions.set_crew(ses, b.get("pilots") or {})))
@@ -1119,8 +1145,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--demo", action="store_true", help="simulated aircraft; contacts nothing")
     ap.add_argument("--port", type=int, default=8787)
+    ap.add_argument("--no-signin", action="store_true",
+                    help="lab use only: do not require a signed-in operator for actions (roles not enforced)")
     a = ap.parse_args()
-    app = App(a.demo)
+    app = App(a.demo, require_signin=not a.no_signin)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(app))
     print(f"[gs] {'DEMO (simulated aircraft)' if a.demo else 'LIVE (real aircraft over ssh)'} -- "
           f"http://127.0.0.1:{a.port}", file=sys.stderr, flush=True)

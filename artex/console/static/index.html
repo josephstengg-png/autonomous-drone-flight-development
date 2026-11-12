@@ -660,15 +660,16 @@ function sesRender() {
     $('sesPin').addEventListener('keydown', e => { if (e.key === 'Enter') $('sesGo').click(); });
     return;
   }
-  b.innerHTML = `<div class="verdict"><span class="big" style="font-size:16px">Signed in: ${esc(SES.operator)}</span><button class="btn" id="sesOut" type="button">Sign out</button></div>
+  b.innerHTML = `<div class="verdict"><span class="big" style="font-size:16px">Signed in: ${esc(SES.operator)}</span><span class="pill ${SES.role === 'observer' ? 'STALE' : 'WAIT'}">${esc(SES.role || '')}</span><button class="btn" id="sesOut" type="button">Sign out</button></div>
     <div class="e" style="margin-top:6px">Crew: one named pilot per aircraft, each holding that aircraft's handset. Needed before any run is authorised.</div>
     <div class="row">${ST.aircraft.map(a => `<label class="f">Pilot for ARTEX${a}<input class="sesPil" data-s="${a}" value="${esc((SES.pilots || {})[a] || '')}" autocomplete="off"></label>`).join('')}</div>
     <div class="bar"><button class="btn solid" id="sesCrew" type="button">Save crew</button><label class="chk" style="margin:0"><input type="checkbox" id="sesAuto" checked><span>Re-run preflight every 10 min while signed in</span></label><span class="e" id="sesMsg"></span></div>
-    <details><summary class="e">Add another operator</summary><div class="row"><label class="f">Name<input id="sesNewName"></label><label class="f">PIN<input id="sesNewPin" type="password" inputmode="numeric"></label></div><div class="bar"><button class="btn" id="sesAdd" type="button">Add operator</button></div></details>`;
+    ${SES.role === 'observer' ? '<div class="note"><b>Observer</b><div class="e">You can watch, ask the assistant and stop aircraft (hold, return, land). Authorising, starting, arming, editing and planning need an operator.</div></div>' : ''}
+    ${SES.role === 'admin' ? `<details><summary class="e">Add a person</summary><div class="row"><label class="f">Name<input id="sesNewName"></label><label class="f">PIN<input id="sesNewPin" type="password" inputmode="numeric"></label><label class="f">Role<select id="sesNewRole"><option value="operator">operator: authorises and runs</option><option value="observer">observer: watches, may stop</option><option value="admin">admin: also manages people</option></select></label></div><div class="bar"><button class="btn" id="sesAdd" type="button">Add</button></div></details>` : ''}`;
   $('sesOut').onclick = async () => { try { await api('POST', '/api/session/signout', {}); } catch (e) {} setSession(null); TOKEN = null; FTOKEN = null; await loadSession(); refreshRun(); fPreview(); };
   $('sesCrew').onclick = async () => { const pilots = {}; document.querySelectorAll('.sesPil').forEach(i => pilots[i.dataset.s] = i.value);
     try { await api('POST', '/api/session/crew', {pilots}); await loadSession(); $('sesMsg').textContent = 'Crew saved.'; refreshRun(); fPreview(); } catch (e) { $('sesMsg').textContent = e.message; } };
-  $('sesAdd').onclick = async () => { try { await api('POST', '/api/session/add_operator', {name: $('sesNewName').value, pin: $('sesNewPin').value}); $('sesMsg').textContent = 'Operator added.'; } catch (e) { $('sesMsg').textContent = e.message; } };
+  if ($('sesAdd')) $('sesAdd').onclick = async () => { try { await api('POST', '/api/session/add_operator', {name: $('sesNewName').value, pin: $('sesNewPin').value, role: $('sesNewRole').value}); $('sesMsg').textContent = 'Added.'; } catch (e) { $('sesMsg').textContent = e.message; } };
 }
 async function autoPreflight() { if (!SES.signed_in || !$('sesAuto') || !$('sesAuto').checked) return;
   for (const a of ST.aircraft) { try { await api('POST', '/api/preflight', {sysid: a}); } catch (e) {} } await loadState(); connectRender(); }

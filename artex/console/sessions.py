@@ -21,6 +21,8 @@ from artex.common.layout import ROOT
 
 OPERATORS_FILE = ROOT / "operators.json"
 SESSION_TTL_S = 12 * 3600
+ROLES = ("observer", "operator", "admin")            # each includes the ones before it
+ROLE_RANK = {r: i for i, r in enumerate(ROLES)}
 PBKDF2_ROUNDS = 200_000
 
 
@@ -39,19 +41,26 @@ def has_operators() -> bool:
     return bool(_load())
 
 
-def add_operator(name: str, pin: str) -> None:
+def add_operator(name: str, pin: str, role: str = "operator") -> None:
     name = name.strip()
     if not re.fullmatch(r"[A-Za-z][A-Za-z .'-]{1,39}", name):
         raise ValueError("Operator name: 2 to 40 letters.")
     if not re.fullmatch(r"\d{4,8}", pin or ""):
         raise ValueError("PIN: 4 to 8 digits.")
+    if role not in ROLES:
+        raise ValueError(f"Role: one of {', '.join(ROLES)}.")
     ops = _load()
     if name.lower() in {k.lower() for k in ops}:
         raise ValueError(f"{name} already exists.")
     salt = secrets.token_hex(16)
-    ops[name] = dict(salt=salt, hash=_hash(pin, salt), created=time.strftime("%Y-%m-%d %H:%M:%S"))
+    ops[name] = dict(salt=salt, hash=_hash(pin, salt), role=role, created=time.strftime("%Y-%m-%d %H:%M:%S"))
     OPERATORS_FILE.write_text(json.dumps(ops, indent=1) + "\n")
     OPERATORS_FILE.chmod(0o600)
+
+
+def role_of(name: str) -> str:
+    rec = _load().get(name) or {}
+    return rec.get("role", "admin" if len(_load()) == 1 else "operator")    # files from before roles: first = admin
 
 
 def check_pin(name: str, pin: str) -> str | None:
@@ -67,9 +76,9 @@ class Sessions:
         self._s: dict[str, dict] = {}
         self._now = now
 
-    def open(self, operator: str) -> str:
+    def open(self, operator: str, role: str = "operator") -> str:
         tok = secrets.token_urlsafe(24)
-        self._s[tok] = dict(operator=operator, pilots={}, accepted={}, opened=self._now())
+        self._s[tok] = dict(operator=operator, role=role, pilots={}, accepted={}, opened=self._now())
         return tok
 
     def get(self, tok: str | None) -> dict | None:
@@ -107,3 +116,10 @@ class Sessions:
     @staticmethod
     def missing_pilots(s: dict, sysids: list[int]) -> list[int]:
         return [x for x in sysids if not s["pilots"].get(str(x))]
+
+
+def allowed(session: dict | None, need: str | None) -> bool:
+    """need None = anyone; otherwise the session's role must rank at least `need`."""
+    if need is None:
+        return True
+    return bool(session) and ROLE_RANK.get(session.get("role", "observer"), 0) >= ROLE_RANK[need]
