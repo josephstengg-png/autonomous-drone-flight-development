@@ -655,7 +655,23 @@ def cmd_prepare(args) -> int:
               token=token, checks=checks,
               reasons=[c["name"] for c in checks if not c["ok"]]))
     if args.resident:
-        return resident_loop(conn, args, token)
+        profile = getattr(args, "downlink", "outdoors")
+        applied = profile != "outdoors" and bool(downlink_commands(profile))
+        if applied:
+            log(f"[link] downlink profile {profile.upper()} (runtime only; restored when the agent leaves)")
+            for _ in range(3):             # the uplink drops commands; three passes
+                send_downlink(conn, downlink_commands(profile), 0.12)
+                time.sleep(1.0)
+        try:
+            return resident_loop(conn, args, token)
+        finally:
+            if applied:
+                try:
+                    for _ in range(2):
+                        send_downlink(conn, downlink_restore_commands(), 0.1)
+                    log("[link] downlink profile restored to PX4's defaults")
+                except Exception:
+                    log("[link] could not restore the downlink; run artex.agent.restore_downlink or reboot the flight controller")
     return 0 if ready else 1
 
 
@@ -736,7 +752,7 @@ def set_height_feed(conn, hz: float) -> None:
 # at 20 Hz. Switching every periodic stream off but the heartbeat gave 0.26 s / 0.24 s (p < 0.001). "outdoors" = PX4's defaults, nothing
 # touched. "indoors" = the streams the offboard-flight verb never reads are switched off and ATTITUDE is slowed. Runtime
 # MAV_CMD_SET_MESSAGE_INTERVAL only: not a parameter, not saved, a reboot or `restore_downlink.py` puts it back.
-DOWNLINK_PROFILES = ("outdoors", "indoors")
+DOWNLINK_PROFILES = ("outdoors", "indoors", "mission")
 # PING, GPS_RAW_INT, SCALED_PRESSURE, ATTITUDE_QUATERNION, SERVO_OUTPUT_RAW, MISSION_CURRENT, VFR_HUD, ATTITUDE_TARGET,
 # POSITION_TARGET_LOCAL_NED, ALTITUDE, VIBRATION, HOME_POSITION, MOUNT_ORIENTATION, GIMBAL_DEVICE_ATTITUDE_STATUS, CURRENT_MODE,
 # OPEN_DRONE_ID_LOCATION
@@ -746,17 +762,48 @@ DOWNLINK_INDOORS_RATES_HZ = {30: 3.0}      # ATTITUDE (tilt guard): ~4.7 Hz by d
 # (height), RC_CHANNELS (takeover), DISTANCE_SENSOR (rangefinder), EXTENDED_SYS_STATE (airborne), ESTIMATOR_STATUS, BATTERY_STATUS.
 
 
+# "mission" (12 Nov 2026): outdoor waypoint runs. PX4 flies the mission itself, so the link carries monitoring, not setpoints;
+# the console's STATUS reads GLOBAL_POSITION_INT, which PX4's default stream does not send at all. Estimated ~280 B/s, about
+# 22 % of the 1240 B/s telemetry capacity (default: ~80-86 %). Not yet measured on the radio (tools: artex.diagnostics.link_sweep).
+DOWNLINK_MISSION_OFF = (4, 29, 31, 36, 74, 83, 85, 141, 241, 265, 285, 436, 12901)
+DOWNLINK_MISSION_RATES_HZ = {33: 2.0,     # GLOBAL_POSITION_INT: a fix every 5 m at 10 m/s, for the map and separation
+                             30: 1.0,     # ATTITUDE
+                             42: 0.5,     # MISSION_CURRENT
+                             65: 1.0,     # RC_CHANNELS: the takeover detector
+                             1: 0.5,      # SYS_STATUS: battery
+                             245: 0.5,    # EXTENDED_SYS_STATE: airborne / landed
+                             24: 0.2,     # GPS_RAW_INT: fix type, satellites
+                             230: 0.2,    # ESTIMATOR_STATUS
+                             147: 0.2,    # BATTERY_STATUS
+                             242: 0.2}    # HOME_POSITION
+TELEMETRY_CAPACITY_BPS = 9921 / 8         # ELRS F500, telemetry ratio 1:2
+
+
 def downlink_commands(profile: str) -> list[tuple[int, int]]:
     """(message id, interval in microseconds) for a profile: -1 = off, a positive number = that period. [] = leave PX4's defaults."""
-    if profile != "indoors":
+    if profile == "indoors":
+        off, rates = DOWNLINK_INDOORS_OFF, DOWNLINK_INDOORS_RATES_HZ
+    elif profile == "mission":
+        off, rates = DOWNLINK_MISSION_OFF, DOWNLINK_MISSION_RATES_HZ
+    else:
         return []
-    return ([(mid, -1) for mid in DOWNLINK_INDOORS_OFF]
-            + [(mid, int(1e6 / hz)) for mid, hz in DOWNLINK_INDOORS_RATES_HZ.items()])
+    return [(mid, -1) for mid in off] + [(mid, int(1e6 / hz)) for mid, hz in rates.items()]
 
 
 def downlink_restore_commands() -> list[tuple[int, int]]:
     """Interval 0 = PX4's default, for every id any profile touches."""
-    return [(mid, 0) for mid in list(DOWNLINK_INDOORS_OFF) + list(DOWNLINK_INDOORS_RATES_HZ)]
+    ids = set(DOWNLINK_INDOORS_OFF) | set(DOWNLINK_INDOORS_RATES_HZ) | set(DOWNLINK_MISSION_OFF) | set(DOWNLINK_MISSION_RATES_HZ)
+    return [(mid, 0) for mid in sorted(ids)]
+
+
+def downlink_budget(profile: str) -> dict:
+    """Estimated bytes/s of the streams a profile SETS (plus the 1 Hz heartbeat): MAVLink 2 payload + 12 bytes of framing."""
+    rates = {"indoors": DOWNLINK_INDOORS_RATES_HZ, "mission": DOWNLINK_MISSION_RATES_HZ}.get(profile, {})
+    def size(mid):
+        cls = mavutil.mavlink.mavlink_map.get(mid)
+        return (cls.unpacker.size if cls is not None else 32) + 12
+    bps = size(0) * 1.0 + sum(size(mid) * hz for mid, hz in rates.items())
+    return dict(profile=profile, bytes_per_s=round(bps), share_of_capacity=round(bps / TELEMETRY_CAPACITY_BPS, 3))
 
 
 def send_downlink(conn, commands: list[tuple[int, int]], spacing_s: float = 0.0, pump=None) -> None:
@@ -2269,7 +2316,8 @@ def main() -> int:
     ap.add_argument("--final-descent-rate", type=float, default=0.05,
                     help="offboard-flight --stage landing: m/s over the last 0.3 m")
     ap.add_argument("--downlink", choices=DOWNLINK_PROFILES, default="outdoors",
-                    help="offboard-flight: which MAVLink streams the aircraft sends back. outdoors = PX4's defaults (nothing touched). "
+                    help="offboard-flight and prepare: which MAVLink streams the aircraft sends back. outdoors = PX4's defaults (nothing touched). "
+                         "mission = outdoor waypoint runs: position at 2 Hz, the rest trimmed (~22 %% of the link). "
                          "indoors = switch off the streams this verb never reads (GPS, gimbal, servo, ...) so the half-duplex ELRS link "
                          "answers commands ~3.5x faster (Experiment 4, 5 Nov 2026). Runtime only, restored at the end")
     ap.add_argument("--setpoint-hz", type=float, default=None,

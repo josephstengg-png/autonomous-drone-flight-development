@@ -48,8 +48,9 @@ PX4_MAIN_AUTO = 4
 PX4_SUB = {2: "TAKEOFF", 3: "LOITER (HOLD)", 4: "MISSION", 5: "RTL", 6: "LAND", 7: "RTGS", 8: "FOLLOW", 9: "PRECLAND"}
 PX4_MAIN = {1: "MANUAL", 2: "ALTITUDE", 3: "POSITION", 4: "AUTO", 5: "ACRO", 6: "OFFBOARD", 7: "STABILIZED"}
 
+DOWNLINKS = ("outdoors", "mission")
 DEFAULTS = dict(name="", description="", mode="upload", flight_type="bench", arm_hold_s=5.0, failsafe_s=60.0,
-                aircraft=[])
+                aircraft=[], downlink="outdoors")
 MEMBER_DEFAULTS = dict(sysid=None, plan="", link="radio")
 
 
@@ -111,6 +112,8 @@ def validate(p: dict) -> list[str]:
         e.append("Mode must be upload, arm or mission.")
     if p["flight_type"] not in FLIGHT_TYPES:
         e.append("Flight type must be bench (props off) or props_on.")
+    if p["downlink"] not in DOWNLINKS:
+        e.append("Downlink must be outdoors (PX4's default streams) or mission (lean, with position at 2 Hz).")
     if p["mode"] == "mission" and p["flight_type"] == "bench":
         e.append("A mission run flies: it cannot be a props-off bench run. Use mode arm to test the gates props off.")
     if not (p["arm_hold_s"] == p["arm_hold_s"] and 1 <= p["arm_hold_s"] <= START_WINDOW_S):
@@ -194,7 +197,7 @@ def agent_argv(p: dict, m: dict, run_id: str) -> list[str]:
     ac = core.AIRCRAFT[m["sysid"]]
     return [*layout.AGENT, "prepare", "--link", ac[m["link"]], "--slot", str(m["sysid"]),
             "--plan", m["plan"], "--run-id", run_id, "--failsafe-s", f"{p['failsafe_s']:g}", "--resident",
-            "--expect-sysid", str(m["sysid"])]
+            "--expect-sysid", str(m["sysid"])] + (["--downlink", p["downlink"]] if p["downlink"] != "outdoors" else [])
 
 
 # ---- responsibility ----------------------------------------------------------------------

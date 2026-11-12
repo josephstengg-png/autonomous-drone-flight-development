@@ -287,6 +287,7 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
     <div class="row">
      <label class="f"><span>Arm-only hold (s) <span class="e">mode "arm", 1 to 8</span></span><input id="ff-hold" type="number" step="1"></label>
      <label class="f"><span>Agent failsafe (s) <span class="e">RTL if the ground station goes silent</span></span><input id="ff-fs" type="number" step="5"></label>
+     <label class="f"><span>Downlink <span class="e">mission = lean, position at 2 Hz (~22 % of the radio)</span></span><select id="ff-dl"><option value="outdoors">PX4 default streams</option><option value="mission">Mission (lean, with position)</option></select></label>
     </div>
     <div class="bar">
      <button class="btn solid" id="fSave" type="button">Save</button>
@@ -918,7 +919,7 @@ function fEdLoad(p) {
   $('ff-name').value = p.name || ''; $('ff-desc').value = p.description || '';
   document.querySelectorAll('input[name=ff-mode]').forEach(r => r.checked = r.value === p.mode);
   document.querySelectorAll('input[name=ff-type]').forEach(r => r.checked = r.value === p.flight_type);
-  $('ff-hold').value = p.arm_hold_s; $('ff-fs').value = p.failsafe_s;
+  $('ff-hold').value = p.arm_hold_s; $('ff-fs').value = p.failsafe_s; $('ff-dl').value = p.downlink || 'outdoors';
   const by = {}; (p.aircraft || []).forEach(a => by[a.sysid] = a);
   $('ffAc').innerHTML = ST.aircraft.map(s => `<div class="fac"><label class="chk" style="margin:0"><input type="checkbox" class="facIn" data-s="${s}" ${by[s] ? 'checked' : ''}><b>ARTEX${s}</b></label><select class="facPlan" data-s="${s}">${planOptions(by[s] ? by[s].plan : '')}</select><select class="facLink" data-s="${s}"><option value="radio" ${!by[s] || by[s].link === 'radio' ? 'selected' : ''}>radio</option><option value="usb" ${by[s] && by[s].link === 'usb' ? 'selected' : ''}>USB</option></select></div>`).join('');
   $('ffAc').querySelectorAll('input,select').forEach(x => x.addEventListener('change', fChanged));
@@ -928,11 +929,11 @@ function fRead() {
   const ac = [...document.querySelectorAll('.facIn')].filter(c => c.checked).map(c => ({sysid: +c.dataset.s, plan: document.querySelector(`.facPlan[data-s="${c.dataset.s}"]`).value, link: document.querySelector(`.facLink[data-s="${c.dataset.s}"]`).value}));
   const num = id => $(id).value === '' ? null : +$(id).value;
   return {name: $('ff-name').value, description: $('ff-desc').value, mode: (document.querySelector('input[name=ff-mode]:checked') || {}).value,
-    flight_type: (document.querySelector('input[name=ff-type]:checked') || {}).value, arm_hold_s: num('ff-hold'), failsafe_s: num('ff-fs'), aircraft: ac};
+    flight_type: (document.querySelector('input[name=ff-type]:checked') || {}).value, arm_hold_s: num('ff-hold'), failsafe_s: num('ff-fs'), downlink: $('ff-dl').value, aircraft: ac};
 }
 function fSegs() { document.querySelectorAll('#ffModeSeg label,#ffTypeSeg label').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); }
 function fChanged() { fSegs(); clearTimeout(fT); fT = setTimeout(fPreview, 150); }
-['ff-name', 'ff-desc', 'ff-hold', 'ff-fs'].forEach(id => $(id).addEventListener('input', fChanged));
+['ff-name', 'ff-desc', 'ff-hold', 'ff-fs'].forEach(id => $(id).addEventListener('input', fChanged)); $('ff-dl').addEventListener('change', fChanged);
 document.querySelectorAll('input[name=ff-mode],input[name=ff-type]').forEach(r => r.addEventListener('change', fChanged));
 async function fPreview() {
   if (!FED) return;

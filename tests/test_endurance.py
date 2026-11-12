@@ -350,7 +350,7 @@ def test_outdoors_touches_nothing_and_indoors_keeps_what_the_agent_reads():
 def test_the_restore_covers_every_id_indoors_touches_and_sets_the_default():
     touched = {mid for mid, _ in agent.downlink_commands("indoors")}
     restored = agent.downlink_restore_commands()
-    assert {mid for mid, _ in restored} == touched
+    assert touched <= {mid for mid, _ in restored}          # restores every id any profile touches (indoors and mission)
     assert all(us == 0 for _, us in restored)          # 0 = PX4's default interval
 
 
