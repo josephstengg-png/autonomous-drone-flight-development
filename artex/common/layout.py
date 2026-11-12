@@ -16,7 +16,7 @@ COMPANION_PAYLOAD = [
     "artex/agent/offboard_control.py", "artex/agent/elrs_link.py", "artex/agent/restore_downlink.py",
     "artex/fleetops/__init__.py", "artex/fleetops/preflight_probe.py", "artex/fleetops/mav_shell.py",
     "artex/fleetops/param_dump.py", "artex/fleetops/param_baseline.py", "artex/fleetops/pull_fc_logs.py",
-    "artex/fleetops/elrs_service.sh", "artex/fleetops/jetson_net.sh",
+    "artex/fleetops/elrs_service.sh", "artex/fleetops/jetson_net.sh", "artex/fleetops/fallback.py",
     "artex/diagnostics/__init__.py", "artex/diagnostics/motor_test.py", "artex/diagnostics/no_gps_check.py",
 ]
 

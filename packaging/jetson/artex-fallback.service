@@ -1,0 +1,17 @@
+# The laptop -> jetson-2 -> jetson-1 fallback watchdog (artex.fleetops.fallback). Stop-only.
+# jetson-2:  ExecStart=... --superior 192.168.144.51 --peer jetson-1 --action hold
+# jetson-1:  ExecStart=... --superior 192.168.144.51 --superior 192.168.144.102 --action hold
+# Needs ssh keys from this companion to its peers (BatchMode). Install: sudo cp to /etc/systemd/system/, edit, enable --now.
+[Unit]
+Description=ARTEX fallback watchdog (stop-only)
+After=network-online.target
+
+[Service]
+User=Orin_NX
+WorkingDirectory=/home/Orin_NX/artex_app
+ExecStart=/usr/bin/python3 -m artex.fleetops.fallback --superior 192.168.144.51 --peer jetson-1 --action hold
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
