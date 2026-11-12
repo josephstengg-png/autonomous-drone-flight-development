@@ -1,16 +1,20 @@
 # SITL site: two PX4 SITL x500s in Docker on this laptop (artex-sitl container, world ubin). Not real aircraft.
+# radio = through artex.diagnostics.radio_link_emulator (ELRS as measured; PX4 port 14540+i <-> agent port 24540+i)
+# usb   = straight to PX4 SITL (the wired case)
 aircraft:
   1:
     host: local
-    radio: "udpin://:14540"
+    radio: "udpout://127.0.0.1:24540"
     usb: "udpin://:14540"
     fleet: fleet-sim1.yaml
     hover: 0.6
     sim: true
+    emulated_radio: true
   2:
     host: local
-    radio: "udpin://:14541"
+    radio: "udpout://127.0.0.1:24541"
     usb: "udpin://:14541"
     fleet: fleet-sim2.yaml
     hover: 0.6
     sim: true
+    emulated_radio: true

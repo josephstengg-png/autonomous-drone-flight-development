@@ -198,7 +198,8 @@ def agent_argv(p: dict, m: dict, run_id: str) -> list[str]:
     ac = core.AIRCRAFT[m["sysid"]]
     return [*layout.AGENT, "prepare", "--link", ac[m["link"]], "--slot", str(m["sysid"]),
             "--plan", m["plan"], "--run-id", run_id, "--failsafe-s", f"{p['failsafe_s']:g}", "--resident",
-            "--expect-sysid", str(m["sysid"])] + (["--downlink", p["downlink"]] if p["downlink"] != "outdoors" else [])
+            "--expect-sysid", str(m["sysid"])] + (["--downlink", p["downlink"]] if p["downlink"] != "outdoors" else []) \
+        + (["--emulated-radio"] if ac.get("emulated_radio") and m["link"] == "radio" else [])
 
 
 # ---- responsibility ----------------------------------------------------------------------

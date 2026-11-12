@@ -68,3 +68,73 @@ on landing, passed.
 **Still open, seen in the run:** both aircraft climb side by side from one launch area — 5 m apart and within 0.1 m of
 each other's height for ~15 s until they reach their layers. The planner warns about it; launch scheduling (stagger
 START, or separate pads) is not built.
+
+## Over the radio: the ELRS link emulator (12-13 Nov 2026)
+
+`artex/diagnostics/radio_link_emulator.py` sits where the ELRS relay sits on a companion: PX4 SITL's API port (14540+*i*)
+on one side, the agent's `udpout://127.0.0.1:24540+i` on the other. Everything crosses it: setpoints, commands, ACKs,
+mission upload, telemetry. Its numbers come from the flight logs (sources in the module docstring): 1240 B/s downlink;
+delay and stalls that grow with downlink load and with a streaming uplink (Exp 4, ulogs 101-132); 1 % loss each way;
+PX4 normal-mode streams instead of SITL's ~340 msgs/s; `SET_MESSAGE_INTERVAL` obeyed as the real port does, raised rates
+honoured at 0.3x (4 Nov measurement). One number is calibrated, not measured: the uplink budget (700 B/s), chosen so
+20 Hz chokes the uplink as Exp 1 showed and 3 Hz does not.
+
+```bash
+python -m artex.diagnostics.radio_link_emulator --px4-port 14540 --agent-port 24540 --seed 1 --log link-1.jsonl &
+python -m artex.diagnostics.radio_link_emulator --px4-port 14541 --agent-port 24541 --seed 2 --log link-2.jsonl &
+# site-examples/sitl/aircraft.yaml: radio = through the emulator, usb = straight to SITL, emulated_radio: true
+```
+
+`emulated_radio: true` makes the console pass `--emulated-radio`, so the agent uses its radio behaviour inside SITL
+(3 Hz setpoints, 8 s ARM retry, the indoor downlink profile, the height-feed check) instead of the simulator's wired one.
+Stop the emulators before running the test suite (one test binds 14540).
+
+**Validation against Experiment 4** (aircraft disarmed, round trip of a harmless command, `validate_link`):
+
+| Condition | Emulated median / p90 | ARTEX113 median / p90 |
+|---|---|---|
+| default streams, 0 Hz | 0.73 / 0.89 s | 0.82 / 0.87 s |
+| trimmed, 0 Hz | 0.27 / 0.28 s | 0.26 / 0.28 s |
+| default streams, 3 Hz | 0.93 / 2.17 s (1 of 12 lost) | 0.98 / 1.43 s (0 of 18) |
+| trimmed, 3 Hz | 0.28 / 0.29 s | 0.24 / 0.31 s |
+
+**Fleet waypoint mission over the emulated radio** (mission downlink): completed on the fourth attempt after fixes,
+arm spread 0.11 s, survey cross-track mean 0.61 / 0.67 m, altitude within 0.1 m, "every aircraft completed its mission".
+
+**Offboard hover at 3 Hz over the emulated radio** (6 runs, alternating downlink as Exp 5): **none held a hover.**
+
+| Run | Downlink | Longest setpoint gap at PX4 | What happened (PX4 log) |
+|---|---|---|---|
+| 1 | indoors | 0.41 s | link held; height loop overshot to 1.81 m -> controller ceiling abort -> PX4 LAND |
+| 2 | outdoors | 2.37 s | Offboard signal lost +2.8 s -> Position mode; PX4 landed it |
+| 3 | indoors | 1.65 s | Offboard lost +2.3 s (back +3.0 s), then overshoot -> ceiling abort |
+| 4 | outdoors | 0.62 s | **runaway climb to 11.6 m**: thrust ramped to 0.80 while late heights showed no lift; guard LAND at "3.08 m" when it was ~5 m |
+| 5 | indoors | 0.62 s | Offboard lost +3.6 s -> Position; **unexplained**: no setpoint gap over 1 s in the emulator log |
+| 6 | outdoors | 2.03 s | Offboard lost +1.3 s -> Position |
+
+Outdoor gaps (2.0-2.4 s) match Exp 5 (1.35-2.9 s). The indoor link is somewhat harsher than Exp 5 measured (one 1.65 s
+gap against 0.51-1.13 s); Exp 5 was props-off on the bench and never sent the flight stages' height-feed request.
+Even where the link held (run 1), the thrust-only height loop could not hold height across the delay, as the 29 Oct
+analysis predicted.
+
+**Defects found and fixed (each with a test):**
+- prepare's on-board mission count had one try: a lost reply refused READY (now 4 tries, like the read-back).
+- **an aircraft left in AUTO.MISSION took off at ARM ALL** (PX4 starts the mission when armed in Mission mode) and one
+  left in OFFBOARD could not arm. Prepare now puts the aircraft in Hold and READY needs it (`mode_hold`); `do_arm`
+  refuses outside Hold.
+- **the console closed the run as "disarmed" and released the agent of that airborne aircraft** (PX4's link-loss
+  failsafe brought it home). An aircraft still armed after DISARM ALL is now a fault, held and supervised until down.
+- READY was reported before the downlink profile was applied (~10 s): over the radio the last aircraft READY armed 7 s
+  after the first. READY now comes when ARM will work (spread 0.08-0.11 s).
+- the START window ran from the LAST arm; PX4's auto-disarm runs from each aircraft's own. A 7 s spread let PX4 disarm
+  one aircraft 0.5 s after MISSION_START. The window now runs from the first arm.
+- a held aircraft's quick RTL could land between two status polls and was called "disarmed mid-mission".
+- `offboard-flight` skipped the indoor profile and the height-feed check in SITL even behind the emulator.
+
+**Open, not changed (decisions for the operator):**
+- The guard's innovation rule includes `mag_ratio`: magnetometer innovations reached 1.37-1.39 in survey corners in
+  SITL and landed an aircraft from 30 m twice. PX4 itself only rejects those compass samples.
+- Props-on flight stages over the radio are an ACCEPT-level risk in the console (`radio_loop`), not a block. Six of six
+  simulated radio hovers failed, one climbing to 11.6 m.
+- The console's preflight said GO while PX4 refused to arm ("Battery unhealthy"): it checks battery percentage, not
+  PX4's own health verdict.

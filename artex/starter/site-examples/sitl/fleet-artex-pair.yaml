@@ -1,4 +1,4 @@
 # both SITL aircraft (used by the out-of-band abort for a group run)
 drones:
-  - {slot: 1, sysid: 1, host: local, sim: true, link: "udpin://:14540"}
-  - {slot: 2, sysid: 2, host: local, sim: true, link: "udpin://:14541"}
+  - {slot: 1, sysid: 1, host: local, sim: true, link: "udpout://127.0.0.1:24540"}
+  - {slot: 2, sysid: 2, host: local, sim: true, link: "udpout://127.0.0.1:24541"}

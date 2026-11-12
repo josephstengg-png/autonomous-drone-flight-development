@@ -208,7 +208,8 @@ def test_the_check_runs_before_the_gate_for_real_flight_stages_only():
     src = Path(agent.__file__).read_text()
     i, j = src.index("height_feed_ready(stamps, time.time(), timeout)"), src.index('emit(dict(event="ready", slot=args.slot, sysid=conn.target_system, stage=stage, ch5=ch5))')
     assert i < j                                                    # before READY, so before any ARM
-    assert "if not sim and upto >= oc.STAGES.index(\"takeoff\"):" in src
+    # real aircraft, or SITL behind the ELRS emulator (--emulated-radio); never plain SITL
+    assert 'if (not sim or getattr(args, "emulated_radio", False)) and upto >= oc.STAGES.index("takeoff"):' in src
 
 
 # ---- the radio height feed (4 Nov 2026) ----
@@ -275,7 +276,8 @@ def test_the_setpoint_rate_is_low_over_a_radio_and_high_on_a_wire_or_in_the_simu
 
 def test_the_agent_applies_the_default_before_anything_transmits():
     src = Path(agent.__file__).read_text()
-    assert "args.setpoint_hz = default_setpoint_hz(args.link, sim, args.setpoint_hz)" in src
+    assert "args.setpoint_hz = default_setpoint_hz(args.link, wired_like, args.setpoint_hz)" in src
+    assert 'wired_like = sim and not getattr(args, "emulated_radio", False)' in src
     assert src.index("args.setpoint_hz = default_setpoint_hz(") < src.index("1.0 / args.setpoint_hz")
 
 

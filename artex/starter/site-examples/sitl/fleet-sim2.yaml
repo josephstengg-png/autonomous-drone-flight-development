@@ -4,4 +4,4 @@ drones:
     sysid: 2
     host: local
     sim: true
-    link: "udpin://:14541"
+    link: "udpout://127.0.0.1:24541"

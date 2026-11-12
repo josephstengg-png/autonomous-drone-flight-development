@@ -291,6 +291,8 @@ def agent_argv(p: dict, trace: str, sysid: int | None = None) -> list[str]:
             a += ["--allow-radio-flight", "--height-timeout-s", f"{p['height_timeout_s'] or 3:g}"]
         elif p["height_timeout_s"]:
             a += ["--height-timeout-s", f"{p['height_timeout_s']:g}"]
+    if ac.get("emulated_radio") and p["link"] == "radio":
+        a.append("--emulated-radio")
     a += ["--trace", trace]
     return a
 

@@ -276,10 +276,16 @@ def upload_mission(conn, items: list[dict], timeout: float = MISSION_UPLOAD_TIME
     log(f"[plan] uploaded {len(items)} items, current index reset to 0")
 
 
-def mission_count_onboard(conn) -> int | None:
-    conn.mav.mission_request_list_send(conn.target_system, 1,
-                                       mavutil.mavlink.MAV_MISSION_TYPE_MISSION)
-    msg = conn.recv_match(type="MISSION_COUNT", blocking=True, timeout=6)
+def mission_count_onboard(conn, attempts: int = 4) -> int | None:
+    """How many items the vehicle holds. Retried like download_mission: 12 Nov 2026, SITL behind the ELRS link emulator,
+    one lost request or reply made the preflight contract read 'None items on board' and refuse READY."""
+    msg = None
+    for _ in range(attempts):
+        conn.mav.mission_request_list_send(conn.target_system, 1,
+                                           mavutil.mavlink.MAV_MISSION_TYPE_MISSION)
+        msg = conn.recv_match(type="MISSION_COUNT", blocking=True, timeout=6)
+        if msg is not None:
+            break
     if msg is None:
         return None
     conn.mav.mission_ack_send(conn.target_system, 1,
@@ -687,35 +693,42 @@ def cmd_prepare(args) -> int:
     upload_mission(conn, items)
     onboard = mission_count_onboard(conn)
     checks = preflight_contract(conn, args.expect_sysid, top_alt, len(items), onboard)
+    in_hold, hold_detail = ensure_hold(conn)
+    checks.append(dict(name="mode_hold", ok=in_hold, detail=hold_detail))
 
     ready = all(c["ok"] for c in checks)
     for c in checks:
         log(f"[check] {'PASS' if c['ok'] else 'FAIL'}  {c['name']}: {c['detail']}")
     token = run_token(args.run_id, plan_path)
-    emit(dict(verb="prepare", slot=args.slot, sysid=conn.target_system, ready=ready,
-              plan=str(plan_path), items=len(items), top_alt_m=top_alt,
-              token=token, checks=checks,
-              reasons=[c["name"] for c in checks if not c["ok"]]))
-    if args.resident:
-        profile = getattr(args, "downlink", "outdoors")
-        applied = profile != "outdoors" and bool(downlink_commands(profile))
-        if applied:
-            log(f"[link] downlink profile {profile.upper()} (runtime only; restored when the agent leaves)")
-            for _ in range(3):             # the uplink drops commands; three passes
-                send_downlink(conn, downlink_commands(profile), 0.12)
-                time.sleep(1.0)
-        args.ceiling_m = mission_ceiling(args, top_alt)
-        log(f"[safety] guard ceiling {args.ceiling_m:g} m (mission tops out at {top_alt:g} m)")
-        try:
-            return resident_loop(conn, args, token)
-        finally:
+    applied = False
+    try:
+        if args.resident:
+            # Everything that takes time happens BEFORE the READY report, so READY means "ARM now works". 12 Nov 2026,
+            # SITL behind the ELRS emulator: READY first, then ~10 s applying the downlink profile; the last aircraft
+            # READY got ARM ALL while still busy and armed 7 s after the first (direct link: 0.01 s, both busy alike).
+            profile = getattr(args, "downlink", "outdoors")
+            applied = profile != "outdoors" and bool(downlink_commands(profile))
             if applied:
-                try:
-                    for _ in range(2):
-                        send_downlink(conn, downlink_restore_commands(), 0.1)
-                    log("[link] downlink profile restored to PX4's defaults")
-                except Exception:
-                    log("[link] could not restore the downlink; run artex.agent.restore_downlink or reboot the flight controller")
+                log(f"[link] downlink profile {profile.upper()} (runtime only; restored when the agent leaves)")
+                for _ in range(3):             # the uplink drops commands; three passes
+                    send_downlink(conn, downlink_commands(profile), 0.12)
+                    time.sleep(1.0)
+            args.ceiling_m = mission_ceiling(args, top_alt)
+            log(f"[safety] guard ceiling {args.ceiling_m:g} m (mission tops out at {top_alt:g} m)")
+        emit(dict(verb="prepare", slot=args.slot, sysid=conn.target_system, ready=ready,
+                  plan=str(plan_path), items=len(items), top_alt_m=top_alt,
+                  token=token, checks=checks,
+                  reasons=[c["name"] for c in checks if not c["ok"]]))
+        if args.resident:
+            return resident_loop(conn, args, token)
+    finally:
+        if applied:
+            try:
+                for _ in range(2):
+                    send_downlink(conn, downlink_restore_commands(), 0.1)
+                log("[link] downlink profile restored to PX4's defaults")
+            except Exception:
+                log("[link] could not restore the downlink; run artex.agent.restore_downlink or reboot the flight controller")
     return 0 if ready else 1
 
 
@@ -727,8 +740,44 @@ def hold_for(at: float | None, what: str) -> None:
             time.sleep(wait)
 
 
+PX4_AUTO, PX4_AUTO_LOITER = 4, 3
+
+
+def vehicle_mode(conn, timeout: float = 3.0) -> tuple[int, int] | None:
+    """(main, sub) PX4 mode from the next autopilot heartbeat, or None."""
+    end = time.time() + timeout
+    while time.time() < end:
+        hb = conn.recv_match(type="HEARTBEAT", blocking=True, timeout=1)
+        if hb and hb.get_srcSystem() == conn.target_system and hb.get_srcComponent() == 1:
+            return (hb.custom_mode >> 16) & 0xFF, (hb.custom_mode >> 24) & 0xFF
+    return None
+
+
+def ensure_hold(conn, attempts: int = 4) -> tuple[bool, str]:
+    """Put a disarmed aircraft in Hold (AUTO.LOITER) and see it there.
+
+    12 Nov 2026, SITL behind the ELRS emulator: an aircraft left in AUTO.MISSION by an earlier run TOOK OFF at ARM ALL --
+    PX4 starts the mission when armed in Mission mode -- before START ALL and before the other aircraft had armed; another,
+    left in OFFBOARD, could not arm at all. In Hold, arming only arms; MISSION_START at START is what launches."""
+    mode = None
+    for _ in range(attempts):
+        mode = vehicle_mode(conn)
+        if mode == (PX4_AUTO, PX4_AUTO_LOITER):
+            return True, "in Hold (AUTO.LOITER)"
+        conn.mav.command_long_send(conn.target_system, 1, mavutil.mavlink.MAV_CMD_DO_SET_MODE, 0,
+                                   1, PX4_AUTO, PX4_AUTO_LOITER, 0, 0, 0, 0)
+        time.sleep(0.5)
+    mode = vehicle_mode(conn) or mode
+    if mode == (PX4_AUTO, PX4_AUTO_LOITER):
+        return True, "in Hold (AUTO.LOITER)"
+    return False, f"could not set Hold: mode is main {mode[0]} sub {mode[1]}" if mode else "could not set Hold: no heartbeat"
+
+
 def do_arm(conn, at: float | None = None) -> dict:
-    """Arm and wait to SEE the armed heartbeat. Never starts the mission."""
+    """Arm and wait to SEE the armed heartbeat. Never starts the mission: refuses unless the aircraft is in Hold."""
+    in_hold, why = ensure_hold(conn, attempts=2)
+    if not in_hold:
+        return dict(armed=False, error=f"not armed: {why}. Arming in Mission mode would launch the aircraft at ARM.")
     hold_for(at, "arm")
     reason, deadline, last_try = None, time.time() + 20, 0.0
     while time.time() < deadline:
@@ -1726,7 +1775,9 @@ def cmd_offboard_flight(args) -> int:
                   outcome=None, takeover_source=None, takeover_stage=None)
     sim = read_param(conn, "SIM_GZ_EN") is not None
     result["simulator"] = sim
-    args.setpoint_hz = default_setpoint_hz(args.link, sim, args.setpoint_hz)
+    # --emulated-radio: SITL behind artex.diagnostics.radio_link_emulator -- behave as over a real radio (3 Hz, slow ARM retry)
+    wired_like = sim and not getattr(args, "emulated_radio", False)
+    args.setpoint_hz = default_setpoint_hz(args.link, wired_like, args.setpoint_hz)
     if not sim:
         need = [("--real-aircraft", args.real_aircraft), ("--expect-sysid", args.expect_sysid)]
         if upto >= oc.STAGES.index("arm"):
@@ -1883,7 +1934,7 @@ def cmd_offboard_flight(args) -> int:
     t_start = time.time()
     try:
         result["downlink"] = getattr(args, "downlink", "outdoors")
-        if result["downlink"] == "indoors" and not sim:
+        if result["downlink"] == "indoors" and (not sim or getattr(args, "emulated_radio", False)):
             cmds = downlink_commands("indoors")
             log(f"[link] downlink profile INDOORS: {len(DOWNLINK_INDOORS_OFF)} unused streams off, ATTITUDE at "
                 f"{DOWNLINK_INDOORS_RATES_HZ[30]:g} Hz (runtime only; restored at the end)")
@@ -1924,7 +1975,7 @@ def cmd_offboard_flight(args) -> int:
             result["outcome"] = "takeover" if took else "no_takeover"
             return 0
 
-        if not sim and upto >= oc.STAGES.index("takeoff"):
+        if (not sim or getattr(args, "emulated_radio", False)) and upto >= oc.STAGES.index("takeoff"):
             # Refuse BEFORE arming if the height feed cannot keep the controller alive (see height_feed_check).
             timeout = args.height_timeout_s or 1.0
             radio_link = not args.link.startswith(("serial:", "/dev/"))
@@ -1978,7 +2029,7 @@ def cmd_offboard_flight(args) -> int:
                 return 2
 
         enter("arm")
-        arm_gap = arm_retry_s(args.link, sim)
+        arm_gap = arm_retry_s(args.link, sim and not getattr(args, "emulated_radio", False))
         arms_sent, last, deadline = 0, 0.0, time.time() + 20
         while time.time() < deadline and not state["armed"] and not hands_off():
             if time.time() - last > arm_gap:
@@ -2384,6 +2435,8 @@ def main() -> int:
                     help="offboard-flight, SIMULATOR ONLY: drop setpoints in bursts like ELRS "
                          "(mean seconds between outages, outage length range)")
     ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--emulated-radio", action="store_true",
+                    help="SITL behind the radio-link emulator: use the radio defaults (3 Hz setpoints, 8 s ARM retry)")
     ap.add_argument("--trace", default=None, help="offboard-flight: write a CSV of the flight")
     ap.add_argument("--mode-chan", type=int, default=7, help="RC channel of the mode switch")
     ap.add_argument("--offboard-chan", type=int, default=5,

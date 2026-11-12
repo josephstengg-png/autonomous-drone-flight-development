@@ -239,3 +239,36 @@ def test_guard_actions_fault_the_aircraft_but_relayed_operator_orders_do_not():
     assert marked == []
     FleetRun.on_event(Fake(), M(), dict(event="safety", action="land", reasons=["innovation test failing for 5.0s"]))
     assert marked and "LAND" in marked[0][1]
+
+
+def test_an_aircraft_that_will_not_disarm_is_held_and_watched_not_released():
+    """12 Nov 2026 (SITL): the run closed as 'disarmed' and released the agent of an aircraft flying its mission."""
+    import threading
+    from artex.console.gs_server import FleetRun
+    sent, notes, faults = [], [], []
+
+    class M:
+        def __init__(self, s, armed):
+            self.sysid, self.alive, self.v = s, True, dict(armed=armed, held=False, status=None, fault=None)
+            self.polls = 0
+
+        def send(self, w):
+            sent.append((self.sysid, w)); return True
+
+        def await_verb(self, verb, t):
+            self.polls += 1
+            return dict(verb="status", armed=self.polls < 3)    # lands on the third poll
+
+    run = FleetRun.__new__(FleetRun)
+    run.members = {1: M(1, False), 2: M(2, True)}
+    run.cancel_evt, run.state = threading.Event(), "disarming"
+    run.note = lambda text, **k: notes.append(text)
+    run.mark_fault = lambda m, why: faults.append((m.sysid, why))
+    import artex.console.gs_fleet as fl
+    old, fl.WATCH_POLL_S = fl.WATCH_POLL_S, 0.01
+    try:
+        assert run._supervise_still_armed() == [2]
+    finally:
+        fl.WATCH_POLL_S = old
+    assert (2, "HOLD") in sent and faults and faults[0][0] == 2 and not run.members[2].v["armed"]
+    assert any("on the ground, disarmed" in n for n in notes) and run.state == "fault"

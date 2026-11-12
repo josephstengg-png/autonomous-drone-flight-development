@@ -447,6 +447,36 @@ class FleetRun:
             self.note(f"ARTEX{s}: " + ("disarmed" if ok else "DISARM NOT CONFIRMED -- disarm by handset (ch6 / hold kill 5 s)"),
                       bad=not ok, sysid=s)
 
+    def _supervise_still_armed(self) -> list[int]:
+        """After a DISARM ALL that some aircraft did not confirm: never release an armed aircraft. 12 Nov 2026 (SITL): an
+        aircraft that had launched at ARM ALL could not be disarmed in the air; the run was closed as 'disarmed' and its
+        agent told to quit, leaving it to PX4's link-loss failsafe. Now it is a fault, it is HELD, and its agent keeps
+        the link while the console watches until it is on the ground and disarmed (or the operator ends the watch)."""
+        armed = [s for s, m in self.members.items() if m.v["armed"]]
+        if not armed:
+            return []
+        for s in armed:
+            self.mark_fault(self.members[s], "still ARMED after DISARM ALL (airborne?) -- held; RTL, LAND or take over")
+            if self.members[s].send("HOLD"):
+                self.members[s].v["held"] = True
+        self.state = "fault"
+        deadline = time.time() + 1800
+        while time.time() < deadline and not self.cancel_evt.is_set():
+            left = [s for s in armed if self.members[s].v["armed"] and self.members[s].alive]
+            if not left:
+                break
+            for s in left:
+                m = self.members[s]
+                m.send("STATUS")
+                r = m.await_verb("status", 10.0)
+                if r:
+                    m.v["status"] = r
+                    if r.get("armed") is False:
+                        m.v["armed"] = False
+                        self.note(f"ARTEX{s}: on the ground, disarmed", sysid=s)
+            self.cancel_evt.wait(fleet.WATCH_POLL_S)
+        return armed
+
     def _finish(self, outcome: str, ok: bool) -> None:
         self.result = dict(outcome=outcome, passed=ok,
                            aircraft={str(s): {k: v for k, v in m.v.items() if k != "token"}
@@ -532,26 +562,37 @@ class FleetRun:
         if not all(m.v["armed"] for m in self.members.values()):
             self.state = "disarming"
             self._disarm_all("not every aircraft armed, so nobody proceeds")
-            return self._finish("ARM gate failed -- disarmed", False)
+            loose = self._supervise_still_armed()
+            return self._finish("ARM gate failed -- disarmed" if not loose else
+                                "ARM gate failed -- " + ", ".join(f"ARTEX{s}" for s in loose)
+                                + " stayed armed after DISARM ALL and was held and watched", False)
         times = [r["t_epoch"] for r in arms.values() if r and r.get("t_epoch")]
         spread = round(max(times) - min(times), 2) if len(times) > 1 else None
         self.rec["arm_spread_s"] = spread
-        self.state, self.t["armed"] = "armed", time.time()
+        # PX4's on-ground auto-disarm clock starts at each aircraft's OWN arm, so the START window runs from the FIRST
+        # one. 12 Nov 2026 (SITL, ELRS emulator): a 7 s arm spread plus the 8 s window from the last arm let the first
+        # aircraft sit armed ~11 s; PX4 disarmed it 0.5 s after MISSION_START.
+        self.state, self.t["armed"] = "armed", (min(times) if times else time.time())
         self.note(f"ALL ARMED (arm spread {spread} s).")
         if mode == "arm":
             self._wait_press(self.cancel_evt, self.p["arm_hold_s"])
             self.state = "disarming"
             self._disarm_all(f"arm-only run: held {self.p['arm_hold_s']:g} s")
             ok = not any(m.v["armed"] for m in self.members.values())
+            self._supervise_still_armed()
             return self._finish("ARM ALL and DISARM ALL proven" if ok else "armed, but a DISARM was not confirmed", ok)
 
         # 3. gate 2: START ALL, inside PX4's auto-disarm window
-        self.note(f"Waiting up to {fleet.START_WINDOW_S:g} s for START ALL (PX4 disarms on the ground after ~10 s).")
-        if not self._wait_press(self.start_evt, fleet.START_WINDOW_S):
+        left = fleet.START_WINDOW_S - (time.time() - self.t["armed"])
+        self.note(f"Waiting up to {max(left, 0):.0f} s for START ALL (PX4 disarms on the ground ~10 s after each arm"
+                  + (f"; {spread:g} s already gone to the arm spread" if spread and spread >= 1 else "") + ").")
+        if left <= 0 or not self._wait_press(self.start_evt, left):
             self.state = "disarming"
             self._disarm_all("START ALL not pressed inside the window" if not self.cancel_evt.is_set()
                              else "operator cancelled")
-            return self._finish("not started -- disarmed", False)
+            loose = self._supervise_still_armed()
+            return self._finish("not started -- disarmed" if not loose else
+                                "not started -- " + ", ".join(f"ARTEX{s}" for s in loose) + " stayed armed and was held", False)
         self.state = "launching"
         at = time.time() + fleet.START_LEAD_S
         for m in self.members.values():
@@ -579,7 +620,10 @@ class FleetRun:
                 r = m.await_verb("status", 10.0)
                 if r:
                     prev = m.v["status"] or {}
-                    r["_was_rtl"] = prev.get("_was_rtl") or fleet.reached_mission_end(r, m.v["items"], bool(m.v["held"]))
+                    # held = the console or the operator took over its ending; a quick RTL can land between two polls
+                    # (12 Nov 2026, ELRS emulator: 5 s from RTL to disarm against a ~7 s poll), so do not need to see it
+                    r["_was_rtl"] = (prev.get("_was_rtl") or bool(m.v["held"])
+                                     or fleet.reached_mission_end(r, m.v["items"], bool(m.v["held"])))
                     m.v.update(status=r, misses=0)
                 else:
                     m.v["misses"] += 1
