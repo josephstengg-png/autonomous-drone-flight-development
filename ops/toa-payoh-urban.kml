@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Toa Payoh urban sector</name>
+  <Placemark><name>GCSlocation</name>
+    <description>Staging: open ground at the estate edge, clear of blocks</description>
+    <Point><coordinates>103.84619130,1.33200519,0</coordinates></Point></Placemark>
+  <Placemark><name>GeoFence</name>
+    <description>Bounded by the arterial roads ringing the estate</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>103.84538260,1.33137213,0 103.85382901,1.33119126,0 103.85508699,1.33535137,0 103.85257104,1.33896885,0 103.84753913,1.33933060,0 103.84502318,1.33571312,0 103.84538260,1.33137213,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+  <Placemark><name>OpsArea</name>
+    <description>Block grid search sector; notch excludes the road/MRT corridor</description>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>103.84700000,1.33300000,0 103.85203190,1.33300000,0 103.85203190,1.33462787,0 103.84996523,1.33462787,0 103.84996523,1.33571312,0 103.85203190,1.33571312,0 103.85203190,1.33734098,0 103.84700000,1.33734098,0 103.84700000,1.33300000,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+</Document>
+</kml>

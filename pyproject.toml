@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "artex-sar"
+dynamic = ["version"]
+description = "ARTEX search-and-rescue ground station, mission planner and aircraft agent"
+requires-python = ">=3.10"
+dependencies = [
+    "pymavlink>=2.4",    # LGPL-3.0: shipped as a separate, replaceable dependency (see LICENSE-NOTICES.md)
+    "PyYAML>=6",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.5"]
+ulog = ["pyulog>=1.0", "numpy>=1.24"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+artex-console = "artex.console.gs_server:main"
+artex-planner = "artex.planner.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "artex.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["artex*"]
+
+[tool.setuptools.package-data]
+"artex.planner" = ["templates/*.md"]
+"artex.console" = ["static/*"]
+"artex.fleetops" = ["*.sh"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# ROS 2 overlays put launch_testing's pytest plugins on the path; they crash collection and are irrelevant here.
+addopts = "-p no:launch_testing -p no:launch_ros"

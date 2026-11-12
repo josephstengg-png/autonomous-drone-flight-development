@@ -1,0 +1,940 @@
+{
+  "fileType": "Plan",
+  "groundStation": "QGroundControl",
+  "version": 1,
+  "geoFence": {
+    "circles": [],
+    "polygons": [
+      {
+        "inclusion": true,
+        "polygon": [
+          [
+            1.33137213,
+            103.8453826
+          ],
+          [
+            1.33119126,
+            103.85382901
+          ],
+          [
+            1.33535137,
+            103.85508699
+          ],
+          [
+            1.33896885,
+            103.85257104
+          ],
+          [
+            1.3393306,
+            103.84753913
+          ],
+          [
+            1.33571312,
+            103.84502318
+          ],
+          [
+            1.33137213,
+            103.8453826
+          ]
+        ]
+      }
+    ],
+    "version": 2
+  },
+  "rallyPoints": {
+    "points": [],
+    "version": 2
+  },
+  "mission": {
+    "cruiseSpeed": 13.0,
+    "firmwareType": 12,
+    "globalPlanAltitudeMode": 1,
+    "hoverSpeed": 5,
+    "vehicleType": 2,
+    "items": [
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 178,
+        "doJumpId": 1,
+        "frame": 2,
+        "params": [
+          1,
+          13.9,
+          -1,
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 22,
+        "doJumpId": 2,
+        "frame": 3,
+        "params": [
+          0.0,
+          0.0,
+          0.0,
+          null,
+          1.333,
+          103.85035444548213,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 3,
+        "frame": 3,
+        "params": [
+          0.0,
+          0.0,
+          0.0,
+          null,
+          1.333,
+          103.85035444548213,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 4,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.3345577204921255,
+          103.85035444548213,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 5,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.33462787,
+          103.85028427701334,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 6,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.33462787,
+          103.85018504381316,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 7,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.3345577204921255,
+          103.85011487534437,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 8,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756541,
+          0.0,
+          null,
+          1.3330701495078745,
+          103.85011487534437,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 9,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756541,
+          0.0,
+          null,
+          1.333,
+          103.8500447068756,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 10,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756539,
+          0.0,
+          null,
+          1.333,
+          103.8499454736754,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 11,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756539,
+          0.0,
+          null,
+          1.3330701495078745,
+          103.84987530520662,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 12,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756539,
+          0.0,
+          null,
+          1.3372708304921255,
+          103.84987530520662,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 13,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756539,
+          0.0,
+          null,
+          1.33734098,
+          103.84980513673784,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 14,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756541,
+          0.0,
+          null,
+          1.33734098,
+          103.84970590353765,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 15,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756541,
+          0.0,
+          null,
+          1.3372708304921255,
+          103.84963573506887,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 16,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756543,
+          0.0,
+          null,
+          1.3330701495078745,
+          103.84963573506887,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 17,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756543,
+          0.0,
+          null,
+          1.333,
+          103.84956556660009,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 18,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756544,
+          0.0,
+          null,
+          1.333,
+          103.8494663333999,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 19,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756544,
+          0.0,
+          null,
+          1.3330701495078745,
+          103.84939616493112,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 20,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.3372708304921255,
+          103.84939616493112,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 21,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.33734098,
+          103.84932599646234,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 22,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.33734098,
+          103.84922676326215,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 23,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.3372708304921255,
+          103.84915659479337,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 24,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756541,
+          0.0,
+          null,
+          1.3330701495078745,
+          103.84915659479337,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 25,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756541,
+          0.0,
+          null,
+          1.333,
+          103.84908642632459,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 26,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756539,
+          0.0,
+          null,
+          1.333,
+          103.8489871931244,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 27,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756539,
+          0.0,
+          null,
+          1.3330701495078745,
+          103.84891702465562,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 28,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756539,
+          0.0,
+          null,
+          1.3372708304921255,
+          103.84891702465562,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 29,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756539,
+          0.0,
+          null,
+          1.33734098,
+          103.84884685618684,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 30,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756541,
+          0.0,
+          null,
+          1.33734098,
+          103.84874762298665,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 31,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.521802154756541,
+          0.0,
+          null,
+          1.3372708304921255,
+          103.84867745451787,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 32,
+        "frame": 3,
+        "params": [
+          0.0,
+          0.0,
+          0.0,
+          null,
+          1.333,
+          103.84867745451787,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 33,
+        "frame": 3,
+        "params": [
+          0.0,
+          2.0,
+          0.0,
+          null,
+          1.3357512322897427,
+          103.84992710740877,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 34,
+        "frame": 3,
+        "params": [
+          0.0,
+          2.6497582507536057,
+          0.0,
+          null,
+          1.335727440005266,
+          103.8500443249302,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 35,
+        "frame": 3,
+        "params": [
+          0.0,
+          2.6497582507536057,
+          0.0,
+          null,
+          1.3357455420510012,
+          103.8500883672991,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 36,
+        "frame": 3,
+        "params": [
+          0.0,
+          2.6497582507536057,
+          0.0,
+          null,
+          1.3357850903681567,
+          103.85011487534437,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 37,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.3372708304921255,
+          103.85011487534437,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 38,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.33734098,
+          103.85018504381316,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 39,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.33734098,
+          103.85028427701334,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 40,
+        "frame": 3,
+        "params": [
+          0.0,
+          5.5218021547565455,
+          0.0,
+          null,
+          1.3372708304921255,
+          103.85035444548213,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 32.0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 41,
+        "frame": 3,
+        "params": [
+          0.0,
+          0.0,
+          0.0,
+          null,
+          1.33571312,
+          103.85035444548213,
+          32.0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      },
+      {
+        "AMSLAltAboveTerrain": null,
+        "Altitude": 0,
+        "AltitudeMode": 1,
+        "autoContinue": true,
+        "command": 20,
+        "doJumpId": 42,
+        "frame": 2,
+        "params": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "SimpleItem",
+        "comment": "drone-2"
+      }
+    ],
+    "plannedHomePosition": [
+      1.33200519,
+      103.8461913,
+      0.0
+    ],
+    "version": 2
+  },
+  "planner": {
+    "name": "multi-agent-flight-planner",
+    "guardrailPassed": true,
+    "warnings": [
+      "3 drones launch from and land at one GCS point: their altitude layers separate them in the air, but climbs and descents at home cross every lower layer -- use separate pads and stagger launch and landing"
+    ],
+    "imaging": {
+      "altitude_m": 30.0,
+      "lane_spacing_m": 25.0,
+      "gsd_cm_px": 2.6,
+      "cruise_speed_m_s": 13.0
+    },
+    "layers": [
+      {
+        "droneId": 1,
+        "altitude_m": 30.0,
+        "lane_spacing_m": 25.0,
+        "gsd_cm_px": 2.6,
+        "cruise_speed_m_s": 13.0
+      },
+      {
+        "droneId": 2,
+        "altitude_m": 32.0,
+        "lane_spacing_m": 26.7,
+        "gsd_cm_px": 2.78,
+        "cruise_speed_m_s": 13.9
+      },
+      {
+        "droneId": 3,
+        "altitude_m": 28.0,
+        "lane_spacing_m": 23.3,
+        "gsd_cm_px": 2.43,
+        "cruise_speed_m_s": 12.2
+      }
+    ],
+    "droneId": 2
+  }
+}

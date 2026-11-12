@@ -1,0 +1,20 @@
+{
+ "name": "pulau-ubin-west-2-2026-11-10 - upload and verify",
+ "description": "Planned from ops/stels-drone-cage.kml: 2 drones at 10 m, lawnmower, into missions/pulau-ubin-west-2-2026-11-10.",
+ "mode": "upload",
+ "flight_type": "bench",
+ "arm_hold_s": 5.0,
+ "failsafe_s": 60.0,
+ "aircraft": [
+  {
+   "sysid": 113,
+   "plan": "missions/pulau-ubin-west-2-2026-11-10/mission_drones/drone-1.plan",
+   "link": "radio"
+  },
+  {
+   "sysid": 115,
+   "plan": "missions/pulau-ubin-west-2-2026-11-10/mission_drones/drone-2.plan",
+   "link": "radio"
+  }
+ ]
+}
