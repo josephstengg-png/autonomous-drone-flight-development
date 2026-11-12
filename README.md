@@ -12,7 +12,7 @@ Laptop (console, planner, assistant)  --ssh-->  Jetson per aircraft (agent, rela
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,plot]"
 .venv/bin/python -m artex.console.gs_server --demo        # open http://127.0.0.1:8787
-.venv/bin/python -m pytest -q                              # 423 tests
+.venv/bin/python -m pytest -q                              # 431 tests
 ```
 
 ## Layout

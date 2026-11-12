@@ -33,6 +33,8 @@ from artex.console import gs_core as core  # noqa: E402
 from artex.console import gs_fleet as fleet  # noqa: E402
 from artex.planner import gs_planner as planner  # noqa: E402
 from artex.console import sessions  # noqa: E402
+from artex.assistant import agent as assistant  # noqa: E402
+from artex.assistant.llm import OllamaChat  # noqa: E402
 from artex.fleetops.swarm_deploy import host_argv, push as push_plan  # noqa: E402
 from artex.common import layout, version  # noqa: E402
 
@@ -625,6 +627,7 @@ class App:
         self.pre: dict[int, dict] = {}
         self.lock = threading.Lock()
         self.sessions = sessions.Sessions()
+        self.llm = OllamaChat()
         self.pin_fails: dict[str, list[float]] = {}
 
     def quick_authorise(self, kind: str, p: dict, s: dict, body: dict) -> tuple[int, dict]:
@@ -823,6 +826,8 @@ def make_handler(app: App):
                 ses = app.sessions.get(self.headers.get("X-GS-Session"))
                 return self._send(200, dict(signed_in=bool(ses), has_operators=sessions.has_operators(),
                                             operator=ses and ses["operator"], pilots=ses and ses["pilots"]))
+            if u.path == "/api/assistant/status":
+                return self._send(200, dict(app.llm.status(), phase="B", mode="advise only"))
             if u.path == "/api/version":
                 return self._send(200, dict(version.report(), demo=app.demo, remote_dir=layout.REMOTE_DIR))
             if u.path == "/api/runs":
@@ -872,6 +877,14 @@ def make_handler(app: App):
                 return self._send(200, dict(token=app.tokens.issue(p, b["operator"], rec), ttl_s=core.TOKEN_TTL_S))
             if path.startswith("/api/session"):
                 return self._session(path, b)
+            if path == "/api/assistant/ask":
+                if not app.sessions.get(self.headers.get("X-GS-Session")):
+                    return self._send(401, dict(error="Sign in to use the assistant."))
+                q = str(b.get("question", "")).strip()
+                if not q:
+                    return self._send(400, dict(error="Ask a question."))
+                return self._send(200, assistant.ask(q[:2000], b.get("context") if isinstance(b.get("context"), dict) else None,
+                                                     llm=app.llm))
             if path in ("/api/run/authorise_quick", "/api/fleet/authorise_quick"):
                 ses = app.sessions.get(self.headers.get("X-GS-Session"))
                 if not ses:

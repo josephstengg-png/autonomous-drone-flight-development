@@ -95,6 +95,10 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
 .v3{height:420px;border:1px solid var(--line);border-radius:6px;margin-top:8px;background:var(--view);position:relative;overflow:hidden}
 .v3 canvas{height:100%;border:0;border-radius:0}
 .modes{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.modes .btn.on{background:var(--accent);color:#fff}
+.asst-btn{position:fixed;right:16px;bottom:16px;z-index:50;border-radius:99px;padding:10px 16px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.asst{position:fixed;right:16px;bottom:64px;z-index:50;width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 96px);overflow:auto;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.asst textarea{width:100%;border:1px solid var(--line);background:var(--field);border-radius:6px;padding:8px;font-size:14px}
+.asst .ans{white-space:pre-wrap;font-size:14px;margin:8px 0}
 .vtx{width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
 </style>
 <script type="importmap">{"imports":{"three":"/static/vendor/three/three.module.min.js","three/addons/":"/static/vendor/three/"}}</script>
@@ -340,6 +344,15 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
   <div class="panel"><h2>Record</h2><div id="recView" class="e">Choose a run.</div></div>
  </div>
 </section>
+</div>
+<button class="btn solid asst-btn" id="asBtn" type="button" aria-expanded="false">Assistant</button>
+<div class="panel asst" id="asPanel" hidden role="dialog" aria-label="Assistant">
+ <div class="verdict" style="justify-content:space-between"><h2 style="margin:0">Assistant <span class="pill WAIT">advise only</span></h2><button class="btn" id="asClose" type="button">Close</button></div>
+ <div class="e" id="asStatus">Checking the model…</div>
+ <div class="e">It reads runs, missions, profiles and the docs, explains, and drafts profiles or planner settings for you to apply. It cannot arm, start, stop, save or upload.</div>
+ <textarea id="asQ" rows="3" placeholder="e.g. Why didn't ARTEX115 arm in the last run?  /  Plan Seletar with 2 drones at 30 m"></textarea>
+ <div class="bar"><button class="btn solid" id="asAsk" type="button">Ask</button><span class="e" id="asMsg"></span></div>
+ <div id="asOut"></div>
 </div>
 
 <script>
@@ -603,6 +616,32 @@ async function showRec(id) {
 
 
 
+
+
+/* ---------- assistant (Phase B: advise only) ---------- */
+async function asStatus() { try { const r = await api('GET', '/api/assistant/status'); $('asStatus').innerHTML = `Model <b>${esc(r.model)}</b>: <span class="pill ${r.ok ? 'GO' : 'NOGO'}">${r.ok ? 'READY' : 'NOT READY'}</span> <span class="e">${esc(r.detail)}</span>`; } catch (e) { $('asStatus').textContent = e.message; } }
+$('asBtn').onclick = () => { const open = $('asPanel').hidden; $('asPanel').hidden = !open; $('asBtn').setAttribute('aria-expanded', String(open)); if (open) { asStatus(); $('asQ').focus(); } };
+$('asClose').onclick = () => { $('asPanel').hidden = true; $('asBtn').setAttribute('aria-expanded', 'false'); };
+$('asQ').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('asAsk').click(); });
+$('asAsk').onclick = async () => {
+  const q = $('asQ').value.trim(); if (!q) return;
+  $('asAsk').disabled = true; $('asMsg').textContent = 'Thinking… (a few seconds on a local model)';
+  const context = {page, run: SNAP && SNAP.id, fleet_run: FSNAP && FSNAP.id, editing_profile: ED && ED.name, editing_fleet_profile: FED && FED.name};
+  try {
+    const r = await api('POST', '/api/assistant/ask', {question: q, context});
+    $('asMsg').textContent = r.error ? '' : `${r.seconds} s, ${r.calls.length} lookup${r.calls.length === 1 ? '' : 's'}`;
+    $('asOut').innerHTML = (r.error ? `<div class="blockbox"><b>The model did not answer</b><div class="e" style="color:var(--ink)">${esc(r.error)}</div></div>` : `<div class="ans">${esc(r.answer)}</div>`)
+      + (r.proposals || []).map((pr, i) => `<div class="note"><b>Draft: ${esc(pr.proposal.replace('_', ' '))}</b>${(pr.errors || []).length ? `<div class="err">${pr.errors.map(esc).join('<br>')}</div>` : ''}<div class="e">${esc(pr.note || '')}</div><div class="bar"><button class="btn solid" data-pi="${i}" type="button">Apply to the form</button></div></div>`).join('')
+      + (r.calls.length ? `<details><summary class="e">What it looked at (${r.calls.length})</summary><ul class="log">${r.calls.map(c => `<li class="${c.refused ? 'bad' : 'ev'}">${esc(c.tool)}(${esc(JSON.stringify(c.arguments))})${c.refused ? ' — ' + esc(c.refused) : ''}</li>`).join('')}</ul></details>` : '');
+    $('asOut').querySelectorAll('[data-pi]').forEach(b => b.onclick = () => asApply(r.proposals[+b.dataset.pi]));
+  } catch (e) { $('asMsg').textContent = e.message; }
+  $('asAsk').disabled = false;
+};
+function asApply(pr) {
+  if (pr.proposal === 'planner_settings') { go('prof'); loadKml(pr.kml).then(() => { $('pl-kml').value = pr.kml; $('pl-site').value = pr.site || ''; $('pl-n').value = pr.drones; $('pl-alt').value = pr.altitude_m; $('pl-ov').value = pr.overlap_pct; $('pl-scan').value = pr.scan; $('pl-msg').textContent = 'Filled in by the assistant: check and press Run the planner.'; $('pl-run').scrollIntoView({block: 'center'}); }); }
+  else if (pr.proposal === 'fleet_profile') { go('fleet'); fEdLoad(Object.assign({}, pr.profile, {id: null})); $('fMsg').textContent = 'Drafted by the assistant: check it, then Save.'; }
+  else if (pr.proposal === 'bench_profile') { go('prof'); edLoad(Object.assign({}, pr.profile, {id: null})); $('edMsg').textContent = 'Drafted by the assistant: check it, then Save.'; }
+}
 
 /* ---------- session and quick authorisation (Phase A2) ---------- */
 function setSession(tok) { SESSION = tok; try { tok ? sessionStorage.setItem('gs-session', tok) : sessionStorage.removeItem('gs-session'); } catch (e) {} }

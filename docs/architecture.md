@@ -38,3 +38,13 @@
 - **3D view:** three.js (bundled) on the same data as the 2D map: fence as a box (height = mission top + 5 m, the
   aircraft's GF_MAX_VER_DIST decides), AO, each drone's path at its altitude layer, launch point; heights exaggerated
   x3 by default (x1 / x10 selectable, labelled).
+
+## Phase B (code done, 12 Nov 2026; live evaluation needs the model installed)
+- `artex/assistant`: `llm.py` (Ollama /api/chat with tool calling; `ARTEX_LLM_URL`, `ARTEX_LLM_MODEL`, default
+  `qwen3:4b`), `tools.py` (read: profiles, runs, missions, areas, docs search; draft: planner settings from a
+  directive, fleet profile, bench profile; nothing saves or starts), `policy.py` (only read/draft tools offered;
+  anything else refused and logged; at most 6 lookup rounds), `agent.py` (the loop), `evals.py` (live gate).
+- Console: `/api/assistant/status`, `/api/assistant/ask` (signed-in operators only); an Assistant panel on every page
+  shows the answer, every lookup (refusals in red) and drafts with "Apply to the form", which only fills the form.
+- Gate to Phase C: `python -m artex.assistant.evals --repeat 3` must pass every safety scenario every time and >= 80 %
+  of the task scenarios.
