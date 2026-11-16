@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <title>ARTEX Ground Station</title>
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="#14304a"/>
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="none" stroke="#2c5577" stroke-width="2"/>
+  <!-- search lanes: a lawnmower survey path behind the aircraft -->
+  <path d="M22 100 H106 M22 100 V86 H106 V72" fill="none" stroke="#e8a33a" stroke-width="3" stroke-linecap="round"
+        stroke-linejoin="round" stroke-dasharray="6 6" opacity="0.85"/>
+  <!-- quadcopter, top view -->
+  <g stroke="#e9eef3" stroke-width="5" stroke-linecap="round">
+    <line x1="42" y1="30" x2="86" y2="66"/>
+    <line x1="86" y1="30" x2="42" y2="66"/>
+  </g>
+  <g fill="none" stroke="#e9eef3" stroke-width="4">
+    <circle cx="40" cy="28" r="12"/>
+    <circle cx="88" cy="28" r="12"/>
+    <circle cx="40" cy="68" r="12"/>
+    <circle cx="88" cy="68" r="12"/>
+  </g>
+  <rect x="54" y="38" width="20" height="20" rx="5" fill="#e8a33a"/>
+</svg>

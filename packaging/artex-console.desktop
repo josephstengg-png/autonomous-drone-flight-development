@@ -3,5 +3,6 @@ Type=Application
 Name=ARTEX Ground Station
 Comment=Search-and-rescue mission planning and fleet console
 Exec=artex-console
+Icon=artex-console
 Terminal=false
 Categories=Utility;

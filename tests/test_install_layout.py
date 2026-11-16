@@ -37,3 +37,15 @@ def test_the_wheel_ships_the_bundled_map_and_3d_libraries():
     assert '"static/**/*"' in toml
     vendor = Path(__file__).resolve().parents[1] / "artex" / "console" / "static" / "vendor"
     assert (vendor / "leaflet" / "leaflet.js").exists() and (vendor / "three" / "three.module.min.js").exists()
+
+
+def test_installs_get_click_to_run_desktop_icons():
+    """16 Nov 2026: the laptop install puts ARTEX Ground Station (and a Demo one) on the desktop and in the menu."""
+    import os
+    from pathlib import Path
+    pk = Path(__file__).resolve().parents[1] / "packaging"
+    assert os.access(pk / "desktop-shortcut.sh", os.X_OK) and (pk / "artex-console.svg").exists()
+    assert "desktop-shortcut.sh" in (pk / "install-laptop.sh").read_text()
+    build = (pk / "build_bundles.sh").read_text()
+    assert "packaging/desktop-shortcut.sh" in build and "artex-console.svg" in build
+    assert "Icon=artex-console" in (pk / "artex-console.desktop").read_text()

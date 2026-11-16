@@ -37,12 +37,13 @@ done
 # the desktop window: pywebview and its pure-Python dependencies (proxy_tools ships only as source: build its wheel here)
 "$PY" -m pip download --quiet -d "$L/wheels" --only-binary=:all: --no-deps "pywebview>=5" bottle typing_extensions
 "$PY" -m pip wheel --quiet --no-deps --use-pep517 -w "$L/wheels" proxy_tools
-cp packaging/install-laptop.sh packaging/artex-console.desktop "$L/"
+cp packaging/install-laptop.sh packaging/artex-console.desktop packaging/desktop-shortcut.sh packaging/artex-console.svg "$L/"
 tar -C "$BUILD" -czf "$DIST/artex-$VER-laptop-offline.tar.gz" "artex-$VER-laptop"
 
 echo "== Debian package"
-D="$BUILD/deb"; mkdir -p "$D/DEBIAN" "$D/opt/artex" "$D/usr/bin" "$D/usr/share/applications"
-cp -r "$L/wheels" "$L/install-laptop.sh" "$D/opt/artex/"
+D="$BUILD/deb"; mkdir -p "$D/DEBIAN" "$D/opt/artex" "$D/usr/bin" "$D/usr/share/applications" "$D/usr/share/icons/hicolor/scalable/apps"
+cp -r "$L/wheels" "$L/install-laptop.sh" "$L/desktop-shortcut.sh" "$L/artex-console.svg" "$D/opt/artex/"
+cp packaging/artex-console.svg "$D/usr/share/icons/hicolor/scalable/apps/artex-console.svg"
 cat > "$D/DEBIAN/control" <<EOF
 Package: artex-sar
 Version: $VER

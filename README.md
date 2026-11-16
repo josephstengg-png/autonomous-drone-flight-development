@@ -13,7 +13,7 @@ Laptop (console, planner, assistant)  --ssh-->  Jetson per aircraft (agent, rela
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,plot]"
 .venv/bin/artex-console --demo                             # the desktop app (needs python3-gi + WebKitGTK, see install)
 .venv/bin/artex-console --demo --serve                     # or in a browser: http://127.0.0.1:8787
-.venv/bin/python -m pytest -q                              # 508 tests
+.venv/bin/python -m pytest -q                              # 509 tests
 ```
 
 ## Layout
