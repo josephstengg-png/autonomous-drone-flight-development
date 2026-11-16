@@ -34,6 +34,9 @@ for pyv in 310 312; do
   "$PY" -m pip download --quiet -d "$L/wheels" --only-binary=:all: --platform manylinux2014_x86_64 \
       --platform manylinux_2_28_x86_64 --python-version "$pyv" --implementation cp "pymavlink>=2.4" "PyYAML>=6" "matplotlib>=3.5"
 done
+# the desktop window: pywebview and its pure-Python dependencies (proxy_tools ships only as source: build its wheel here)
+"$PY" -m pip download --quiet -d "$L/wheels" --only-binary=:all: --no-deps "pywebview>=5" bottle typing_extensions
+"$PY" -m pip wheel --quiet --no-deps --use-pep517 -w "$L/wheels" proxy_tools
 cp packaging/install-laptop.sh packaging/artex-console.desktop "$L/"
 tar -C "$BUILD" -czf "$DIST/artex-$VER-laptop-offline.tar.gz" "artex-$VER-laptop"
 
@@ -45,7 +48,7 @@ Package: artex-sar
 Version: $VER
 Architecture: amd64
 Maintainer: ARTEX
-Depends: python3 (>= 3.10), python3-venv
+Depends: python3 (>= 3.10), python3-venv, python3-gi, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0
 Description: ARTEX search-and-rescue ground station (console, mission planner, fleet tools, assistant)
 EOF
 cat > "$D/DEBIAN/postinst" <<'EOF'

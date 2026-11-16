@@ -878,60 +878,23 @@ class App:
         return dict(ok=r.returncode == 0, text=(r.stderr or r.stdout).strip()[-400:])
 
 
-def make_handler(app: App):
-    class H(BaseHTTPRequestHandler):
-        server_version = "gs/1"
+def make_router(app: App):
+    """Every API route, independent of how the call arrives: the web server, the desktop window's bridge and the local
+    Python API (artex.console.local_api) all go through `dispatch`, so they cannot drift apart -- same roles, sessions,
+    tokens, confirmation words and answers (16 Nov 2026, docs/local-app-plan.md)."""
 
-        def log_message(self, *a):          # quiet
-            pass
+    class R:
+        def __init__(self, token: str | None):
+            self.token = token
 
-        def _send(self, code: int, body, ctype="application/json") -> None:
-            data = body if isinstance(body, bytes) else (json.dumps(body, default=str) if ctype == "application/json"
-                                                          else body).encode()
-            self.send_response(code)
-            self.send_header("Content-Type", ctype + ("; charset=utf-8" if ctype.startswith("text/") or ctype.endswith("javascript") else ""))
-            self.send_header("Content-Length", str(len(data)))
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(data)
-
-        def _guard(self, post: bool) -> bool:
-            port = self.server.server_address[1]
-            allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
-            if self.headers.get("Host", "") not in allowed_hosts:
-                self._send(403, dict(error="bad Host"))
-                return False
-            if post:
-                origin = self.headers.get("Origin")
-                if origin and origin.split("://", 1)[-1] not in allowed_hosts:
-                    self._send(403, dict(error="bad Origin"))
-                    return False
-                if self.headers.get("X-GS-Client") != "ui":
-                    self._send(403, dict(error="missing X-GS-Client"))
-                    return False
-            return True
-
-        def _body(self) -> dict:
-            n = int(self.headers.get("Content-Length") or 0)
-            try:
-                return json.loads(self.rfile.read(n) or b"{}")
-            except ValueError:
-                return {}
+        @staticmethod
+        def _send(code: int, body):
+            return code, body
 
         # ---- GET ----
-        def do_GET(self):
-            if not self._guard(False):
-                return
-            u = urlparse(self.path)
+        def get(self, path: str):
+            u = urlparse(path)
             q = parse_qs(u.query)
-            if u.path in ("/", "/index.html"):
-                return self._send(200, GUI.read_bytes(), "text/html")
-            if u.path.startswith("/static/"):
-                # bundled libraries (Leaflet, three.js) so the console works with no internet in the field
-                f = (STATIC / u.path[len("/static/"):]).resolve()
-                if STATIC not in f.parents or not f.is_file() or f.suffix not in MIME:
-                    return self._send(404, dict(error="not found"))
-                return self._send(200, f.read_bytes(), MIME[f.suffix])
             if u.path == "/api/state":
                 return self._send(200, dict(demo=app.demo, phrase=core.PHRASE, aircraft=sorted(core.AIRCRAFT),
                                             stages=[[s, core.STAGE_NOTE[s]] for s in core.STAGES],
@@ -975,7 +938,7 @@ def make_handler(app: App):
                     return self._send(200, dict(state="none", kind="fleet"))
                 return self._send(200, app.fleet.snapshot(int(q.get("since", ["0"])[0])))
             if u.path == "/api/session":
-                ses = app.sessions.get(self.headers.get("X-GS-Session"))
+                ses = app.sessions.get(self.token)
                 return self._send(200, dict(signed_in=bool(ses), has_operators=sessions.has_operators(),
                                             operator=ses and ses["operator"], pilots=ses and ses["pilots"],
                                             role=ses and ses.get("role"), require_signin=app.require_signin))
@@ -990,16 +953,14 @@ def make_handler(app: App):
                 r = core.load_run(u.path.rsplit("/", 1)[-1])
                 return self._send(200 if r else 404, dict(record=r, history=core.history_block(r)) if r
                                   else dict(error="no such run"))
-            self._send(404, dict(error="not found"))
+            return self._send(404, dict(error="not found"))
 
         # ---- POST ----
-        def do_POST(self):
-            if not self._guard(True):
-                return
-            u, b = urlparse(self.path), self._body()
+        def post(self, path: str, b: dict):
+            u = urlparse(path)
             if app.require_signin:
                 need = route_role(u.path)
-                ses = app.sessions.get(self.headers.get("X-GS-Session"))
+                ses = app.sessions.get(self.token)
                 if not sessions.allowed(ses, need):
                     return self._send(401 if not ses else 403,
                                       dict(error="Sign in first." if not ses else
@@ -1039,7 +1000,7 @@ def make_handler(app: App):
             if path.startswith("/api/session"):
                 return self._session(path, b)
             if path == "/api/assistant/ask":
-                if not app.sessions.get(self.headers.get("X-GS-Session")):
+                if not app.sessions.get(self.token):
                     return self._send(401, dict(error="Sign in to use the assistant."))
                 q = str(b.get("question", "")).strip()
                 if not q:
@@ -1050,7 +1011,7 @@ def make_handler(app: App):
                                                      act_ok=assistant_actions.delegation_problem(app, tok) is None,
                                                      delegation=app.delegations.get(tok or "")))
             if path in ("/api/run/authorise_quick", "/api/fleet/authorise_quick"):
-                ses = app.sessions.get(self.headers.get("X-GS-Session"))
+                ses = app.sessions.get(self.token)
                 if not ses:
                     return self._send(401, dict(error="Sign in first (Connect page)."))
                 kind = "fleet" if path.startswith("/api/fleet") else "single"
@@ -1087,11 +1048,11 @@ def make_handler(app: App):
                     return self._send(200, app.abort_out_of_band(None))
                 sysid = int(run.rec["profile"]["sysid"]) if run else int(b["sysid"])
                 return self._send(200, app.abort_out_of_band(sysid))
-            self._send(404, dict(error="not found"))
+            return self._send(404, dict(error="not found"))
 
         def _session_view(self, p: dict, items: list[dict], sysids: list[int]) -> dict:
             """For the quick authorisation panel: is the session ready for THIS profile?"""
-            ses = app.sessions.get(self.headers.get("X-GS-Session"))
+            ses = app.sessions.get(self.token)
             if not ses:
                 return dict(signed_in=False)
             need = {i["id"] for i in items if i["level"] == "accept"}
@@ -1101,7 +1062,7 @@ def make_handler(app: App):
                         pilots={str(x): ses["pilots"].get(str(x)) for x in sysids})
 
         def _session(self, path: str, b: dict):
-            tok = self.headers.get("X-GS-Session")
+            tok = self.token
             ses = app.sessions.get(tok)
             if path == "/api/session/first_operator":
                 if sessions.has_operators():
@@ -1139,7 +1100,7 @@ def make_handler(app: App):
                 ids = [i["id"] for i in items if i["level"] == "accept"]
                 sessions.Sessions.accept(ses, core.profile_hash(prof), ids)
                 return self._send(200, dict(accepted=ids))
-            self._send(404, dict(error="not found"))
+            return self._send(404, dict(error="not found"))
 
         def _fleet(self, path: str, b: dict):
             ctx = lambda p: {m["sysid"]: app.ctx(m["sysid"]) for m in p["aircraft"]}  # noqa: E731
@@ -1192,7 +1153,85 @@ def make_handler(app: App):
                                     "fleet-artex-pair.yaml", "--now"], capture_output=True, text=True,
                                    timeout=40, cwd=str(ROOT))
                 return self._send(200, dict(ok=r.returncode == 0, text=(r.stderr or r.stdout).strip()[-400:]))
-            self._send(404, dict(error="not found"))
+            return self._send(404, dict(error="not found"))
+
+    return R
+
+
+def dispatch(app: App, method: str, path: str, body: dict | None = None, session: str | None = None) -> tuple[int, dict]:
+    """One API call: (status, JSON-able body). `path` may carry a query string (/api/run?since=4)."""
+    cls = getattr(app, "_router_cls", None)
+    if cls is None:
+        cls = app._router_cls = make_router(app)
+    r = cls(session if isinstance(session, str) and session else None)
+    if method.upper() == "GET":
+        return r.get(path)
+    if method.upper() == "POST":
+        return r.post(path, body if isinstance(body, dict) else {})
+    return 405, dict(error=f"method {method} not supported")
+
+
+def make_handler(app: App):
+    """The web server (artex-console --serve): HTTP framing and its own guards; every route is `dispatch`."""
+    class H(BaseHTTPRequestHandler):
+        server_version = "gs/1"
+
+        def log_message(self, *a):          # quiet
+            pass
+
+        def _send(self, code: int, body, ctype="application/json") -> None:
+            data = body if isinstance(body, bytes) else (json.dumps(body, default=str) if ctype == "application/json"
+                                                          else body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", ctype + ("; charset=utf-8" if ctype.startswith("text/") or ctype.endswith("javascript") else ""))
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _guard(self, post: bool) -> bool:
+            port = self.server.server_address[1]
+            allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+            if self.headers.get("Host", "") not in allowed_hosts:
+                self._send(403, dict(error="bad Host"))
+                return False
+            if post:
+                origin = self.headers.get("Origin")
+                if origin and origin.split("://", 1)[-1] not in allowed_hosts:
+                    self._send(403, dict(error="bad Origin"))
+                    return False
+                if self.headers.get("X-GS-Client") != "ui":
+                    self._send(403, dict(error="missing X-GS-Client"))
+                    return False
+            return True
+
+        def _body(self) -> dict:
+            n = int(self.headers.get("Content-Length") or 0)
+            try:
+                return json.loads(self.rfile.read(n) or b"{}")
+            except ValueError:
+                return {}
+
+        def do_GET(self):
+            if not self._guard(False):
+                return
+            u = urlparse(self.path)
+            if u.path in ("/", "/index.html"):
+                # the page's asset paths are relative (so the desktop app can open it from disk); served here, they resolve
+                # under /static/
+                return self._send(200, GUI.read_bytes().replace(b"<head>", b'<head><base href="/static/">', 1), "text/html")
+            if u.path.startswith("/static/"):
+                # bundled libraries (Leaflet, three.js) so the console works with no internet in the field
+                f = (STATIC / u.path[len("/static/"):]).resolve()
+                if STATIC not in f.parents or not f.is_file() or f.suffix not in MIME:
+                    return self._send(404, dict(error="not found"))
+                return self._send(200, f.read_bytes(), MIME[f.suffix])
+            self._send(*dispatch(app, "GET", self.path, None, self.headers.get("X-GS-Session")))
+
+        def do_POST(self):
+            if not self._guard(True):
+                return
+            self._send(*dispatch(app, "POST", self.path, self._body(), self.headers.get("X-GS-Session")))
 
     return H
 

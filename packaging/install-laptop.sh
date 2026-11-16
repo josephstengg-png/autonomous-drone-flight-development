@@ -19,5 +19,5 @@ if [ "$PREFIX" != "/opt/artex" ] && [ "$LINK" = 1 ]; then
   fi
 fi
 echo "Installed $("$PREFIX/venv/bin/python" -c 'import artex; print(artex.__version__)') into $PREFIX."
-echo "Start:  artex-console        (then open http://127.0.0.1:8787; first run creates ~/.local/share/artex for your data)"
+echo "Start:  artex-console        (opens the desktop app; first run creates ~/.local/share/artex for your data; --serve for a browser)"
 echo "Demo:   artex-console --demo"

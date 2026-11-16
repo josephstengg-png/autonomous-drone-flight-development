@@ -2,8 +2,8 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ARTEX Ground Station</title>
-<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
-<script src="/static/vendor/leaflet/leaflet.js"></script>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<script src="vendor/leaflet/leaflet.js"></script>
 <style>
 :root{--bg:#eef1f4;--panel:#fff;--ink:#16202a;--mute:#5b6b7a;--line:#d5dce3;--go:#1c7a46;--gob:#dff3e6;--no:#b3261e;--nob:#fbe3e1;
 --stale:#8a5a00;--staleb:#fdf0d2;--idle:#4a5a69;--idleb:#e3e8ed;--abort:#c4121a;--accent:#0b5cab;--accb:#dbeafe;--view:#f7f9fb;--grid:#d9e0e7;--path:#0b5cab;--fence:#b3261e;--trail:#1c7a46;--field:#fff;--d1:#0b5cab;--d2:#c2410c;--d3:#15803d;--d4:#7c3aed;--ops:#5b6b7a}
@@ -101,7 +101,7 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
 .asst .ans{white-space:pre-wrap;font-size:14px;margin:8px 0}
 .vtx{width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
 </style>
-<script type="importmap">{"imports":{"three":"/static/vendor/three/three.module.min.js","three/addons/":"/static/vendor/three/"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/"}}</script>
 </head>
 <body><div class="wrap">
 <header>
@@ -361,13 +361,34 @@ pre.cmd{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,M
 (() => {
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* Desktop app (opened from disk inside pywebview): the API is a Python bridge, not HTTP. Same paths, same answers --
+   both go to gs_server.dispatch. docs/local-app-plan.md */
+const DESKTOP = location.protocol === 'file:';
+const BRIDGE = DESKTOP ? new Promise(res => {
+  if (window.pywebview && window.pywebview.api) res(window.pywebview.api);
+  else window.addEventListener('pywebviewready', () => res(window.pywebview.api), {once: true});
+}) : null;
 async function api(method, path, body) {
+  if (BRIDGE) {
+    const r = await (await BRIDGE).call(method, path, body || null, SESSION || null);
+    if (!r || r.status >= 400) throw Object.assign(new Error((r && r.body && r.body.error) || ('HTTP ' + (r && r.status))), {status: r && r.status});
+    return r.body;
+  }
   const h = {'X-GS-Client': 'ui', 'Content-Type': 'application/json'}; if (SESSION) h['X-GS-Session'] = SESSION;
   const r = await fetch(path, {method, headers: h, body: body ? JSON.stringify(body) : undefined});
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw Object.assign(new Error(j.error || r.statusText), {status: r.status});
   return j;
 }
+/* desktop app: the close guard (the window refuses to close during a run; the operator may still confirm) and the
+   --check self-test */
+window.__artexCloseBlocked = async (msg) => { if (confirm(msg)) { try { await (await BRIDGE).force_close(); } catch (e) {} } };
+if (DESKTOP) setTimeout(async () => {
+  try { const st = await api('GET', '/api/state');
+        window.__artexCheck = {ok: !!(st && st.aircraft && st.aircraft.length && typeof L !== 'undefined' && window.ARTEX3D),
+                               aircraft: st.aircraft, leaflet: typeof L, three: typeof window.ARTEX3D, demo: st.demo}; }
+  catch (e) { window.__artexCheck = {ok: false, error: String(e)}; }
+}, 2500);
 function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} return null; }
 
 let SESSION = (() => { try { return sessionStorage.getItem('gs-session'); } catch (e) { return null; } })(), SES = {};

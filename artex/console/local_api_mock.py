@@ -213,13 +213,17 @@ class MockConsole:
     def authorise(self, kind: str, profile: dict, confirm: str, delegate: bool = False) -> dict:
         """The press-and-hold, for scripts: `confirm` must be the word "AUTHORISE"."""
         self._need("operator")
+        pv = self.preview(kind, profile)            # same order and codes as the console: preflight block (403),
+        done = (self.session or {}).get("preflight", {})   # risks, pilots (409), then the word (403)
+        no_pf = [s for s in ([m["sysid"] for m in profile.get("aircraft", [])] or [profile.get("sysid")]) if s not in done]
+        if no_pf:
+            raise ApiError(403, f"Blocked: Preflight GO needed on every aircraft (missing {no_pf}).")
+        if pv["missing_accept"]:
+            raise ApiError(409, f"Accept the risks first: {pv['missing_accept']} (accept_risks).")
+        if pv["missing_pilots"]:
+            raise ApiError(409, f"Name a pilot for {pv['missing_pilots']} (set_crew).")
         if confirm != "AUTHORISE":
             raise ApiError(403, 'Confirm with confirm="AUTHORISE" (props, area and pilots checked).')
-        pv = self.preview(kind, profile)
-        if pv["missing_pilots"]:
-            raise ApiError(403, f"Name a pilot for {pv['missing_pilots']} (set_crew).")
-        if pv["missing_accept"]:
-            raise ApiError(403, f"Accept the risks first: {pv['missing_accept']} (accept_risks).")
         tok = secrets.token_urlsafe(16)
         self.tokens[tok] = dict(hash=_hash(profile), at=self.now, kind=kind, delegate=delegate)
         return dict(token=tok, ttl_s=TOKEN_TTL_S, delegated=delegate)

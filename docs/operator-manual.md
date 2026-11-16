@@ -15,6 +15,15 @@ it says what the console can and cannot do for you, and why the pilots' handsets
 The first person to open a new installation creates the admin account. Admins add everyone else
 (Connect page → "Add a person"). PINs are stored only as salted hashes; five wrong PINs lock that name for a minute.
 
+## Starting the console
+
+Open **ARTEX Ground Station** from the applications menu, or run `artex-console`. It opens in its own window.
+(`artex-console --serve` gives the same console in a browser at http://127.0.0.1:8787.)
+
+**Closing the window during a run is refused.** The console holds the link to the companions; if it closes, each
+aircraft returns to launch on its own after about 60 s. Finish or stop the run first. If you must close anyway, the
+window asks you to confirm and tells you what will happen.
+
 ## Start of the day (about a minute)
 
 1. **Sign in** (Connect page): your name and PIN.

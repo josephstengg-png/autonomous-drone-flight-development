@@ -1,6 +1,16 @@
 # Plan: the console as a local desktop app with a local API
 
-Status: **plan, nothing built yet** (16 Nov 2026). The mock of the API exists and runs: `artex/console/local_api_mock.py`.
+Status: **built** (16 Nov 2026). Desktop app `artex/console/desktop.py`, local API `artex/console/local_api.py`, router
+`gs_server.make_router` / `dispatch`, mock `artex/console/local_api_mock.py`. Departures from the plan, and what step 0
+found:
+- the router lives in `gs_server.py` (`make_router`, `dispatch`), not a separate `router.py`: no circular imports;
+- step 0: Leaflet and the three.js ES module load fine from `file://` in WebKitGTK 4.0; browser storage needs
+  pywebview's `private_mode=False` (kept under `<data>/.desktop-webview`); the page's asset paths became relative, and
+  the web server adds `<base href="/static/">`;
+- `proxy_tools` (a pywebview dependency) ships only as source: the bundle builds its wheel;
+- found on the way: the wheel had never shipped `static/vendor/` (no offline maps or 3D in installed copies) -- fixed;
+- the close guard asks the page to confirm (a dialog inside the window's closing handler would block the GUI thread);
+- extra launcher switches: `--check` (hidden-window self-test) and `--safe-graphics`.
 
 ## Why
 

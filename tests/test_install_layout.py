@@ -28,3 +28,12 @@ def test_a_site_aircraft_file_replaces_the_lab_aircraft(tmp_path, monkeypatch):
         assert core.AIRCRAFT[201]["radio"].startswith("udpout://")
     finally:
         core.AIRCRAFT.clear(); core.AIRCRAFT.update(saved)
+
+
+def test_the_wheel_ships_the_bundled_map_and_3d_libraries():
+    """16 Nov 2026: package-data had only "static/*", so installed copies had no Leaflet / three.js (no maps, no 3D)."""
+    from pathlib import Path
+    toml = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
+    assert '"static/**/*"' in toml
+    vendor = Path(__file__).resolve().parents[1] / "artex" / "console" / "static" / "vendor"
+    assert (vendor / "leaflet" / "leaflet.js").exists() and (vendor / "three" / "three.module.min.js").exists()

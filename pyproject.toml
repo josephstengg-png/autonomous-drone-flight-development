@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pymavlink>=2.4",    # LGPL-3.0: shipped as a separate, replaceable dependency (see LICENSE-NOTICES.md)
     "PyYAML>=6",
+    "pywebview>=5",      # the desktop window (BSD-3); needs the system's python3-gi + WebKitGTK at run time
 ]
 
 [project.optional-dependencies]
@@ -18,7 +19,7 @@ ulog = ["pyulog>=1.0", "numpy>=1.24"]
 dev = ["pytest>=7"]
 
 [project.scripts]
-artex-console = "artex.console.gs_server:main"
+artex-console = "artex.console.desktop:main"   # --serve: the web server
 artex-planner = "artex.planner.cli:main"
 
 [tool.setuptools.dynamic]
@@ -29,7 +30,7 @@ include = ["artex*"]
 
 [tool.setuptools.package-data]
 "artex.planner" = ["templates/*.md"]
-"artex.console" = ["static/*"]
+"artex.console" = ["static/*", "static/**/*"]   # **: the bundled Leaflet and three.js under static/vendor
 "artex.fleetops" = ["*.sh"]
 "artex" = ["starter/*", "starter/**/*"]
 

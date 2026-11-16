@@ -10,6 +10,7 @@ def _ready(c=None, **kw):
     c.first_operator("Ops Lead", "482916")
     c.sign_in("Ops Lead", "482916")
     c.set_crew({113: "Pilot A", 115: "Pilot B"})
+    c.preflight(113); c.preflight(115)
     p = dict(name="pair", mode="mission", aircraft=[dict(sysid=113, plan="a"), dict(sysid=115, plan="b")])
     c.accept_risks("fleet", p)
     tok = c.authorise("fleet", p, confirm="AUTHORISE")["token"]
@@ -29,12 +30,16 @@ def test_authorise_needs_pilots_risks_and_the_confirmation_word():
     c = MockConsole()
     c.first_operator("Ops Lead", "482916"); c.sign_in("Ops Lead", "482916")
     p = dict(name="pair", aircraft=[dict(sysid=113), dict(sysid=115)])
-    for setup, word in ((lambda: None, "AUTHORISE"), (lambda: c.set_crew({113: "A", 115: "B"}), "AUTHORISE"),
-                        (lambda: c.accept_risks("fleet", p), "yes")):
+    with pytest.raises(ApiError) as e:
+        c.authorise("fleet", p, confirm="AUTHORISE")
+    assert e.value.status == 403 and "Preflight" in e.value.message
+    c.preflight(113); c.preflight(115)
+    for setup, word, code in ((lambda: None, "AUTHORISE", 409), (lambda: c.accept_risks("fleet", p), "AUTHORISE", 409),
+                              (lambda: c.set_crew({113: "A", 115: "B"}), "yes", 403)):
         setup()
         with pytest.raises(ApiError) as e:
             c.authorise("fleet", p, confirm=word)
-        assert e.value.status == 403
+        assert e.value.status == code
     assert c.authorise("fleet", p, confirm="AUTHORISE")["token"]
 
 

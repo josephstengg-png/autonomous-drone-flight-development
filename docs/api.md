@@ -1,6 +1,42 @@
 # Console API
 
-The console serves its web page and this JSON API on **127.0.0.1:8787** only. Every request must carry `Host: 127.0.0.1:8787`
+Three ways in, one set of rules: the **desktop app** (its page calls Python through a bridge), the **local Python API**
+(scripts, the assistant) and the **web server** (`artex-console --serve`). All three go through one router
+(`gs_server.dispatch`), so roles, sessions, tokens, confirmation words and refusals are identical.
+
+## Local Python API
+
+```python
+from artex.console.local_api import Console, ApiError
+c = Console.open(demo=True)                     # its own console; inside the desktop app: Console(app)
+c.sign_in("Ops Lead", "482916")
+c.set_crew({113: "Pilot A", 115: "Pilot B"})
+for s in (113, 115):
+    assert c.preflight(s)["go"]
+c.accept_risks("fleet", profile)
+tok = c.authorise("fleet", profile, confirm="AUTHORISE")["token"]
+c.start("fleet", profile, tok); c.wait_for("ready")
+c.arm_all(tok, confirm="ARM ALL"); c.wait_for("armed")
+c.start_all(tok, confirm="START ALL")
+c.wait_for(("done", "ended"))
+```
+
+Methods: `state`, `version`, `first_operator`, `sign_in`, `sign_out`, `session_info`, `add_operator`, `set_crew`,
+`preflight`, `list_areas`, `area`, `draw_area`, `upload_kml`, `plan_mission`, `list_missions`, `mission`,
+`list_profiles`, `save_profile`, `delete_profile`, `preview`, `accept_risks`, `authorise`, `start`, `status`,
+`wait_for`, `arm` (single run, `confirm="ARM"`), `arm_all`, `start_all`, `stop` (HOLD / RTL / LAND, any role, no token),
+`cancel`, `abort_flag`, `list_runs`, `run`, `assistant_status`, `ask`. Each maps to one route below. Refusals raise
+`ApiError(status, message)` with the same status codes. `artex.console.local_api_mock.MockConsole` has the same interface
+with simulated aircraft and nothing behind it (`python -m artex.console.local_api_mock`).
+
+## Desktop bridge
+
+The page, opened from disk in the desktop window, calls `window.pywebview.api.call(method, path, body, session)` and gets
+`{status, body}`: the same route paths and answers as HTTP, with no network involved. Only `/api/...` paths are accepted.
+
+## Web server
+
+With `artex-console --serve`, the console serves its web page and this JSON API on **127.0.0.1:8787** only. Every request must carry `Host: 127.0.0.1:8787`
 (or `localhost:8787`); every POST must also carry `X-GS-Client: ui` and, when sign-in is required (the default), the
 session token in `X-GS-Session`. Roles: **observer** < **operator** < **admin** (each includes the ones before it).
 

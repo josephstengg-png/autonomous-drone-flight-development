@@ -17,7 +17,13 @@ or the Debian package: `sudo apt install ./artex-sar_<ver>_amd64.deb` (installs 
 
 Check `sha256sum -c SHA256SUMS` before installing; if the release is signed, `gpg --verify SHA256SUMS.asc` first.
 
-Start with `artex-console` and open http://127.0.0.1:8787. The first start creates the data folder
+The desktop window needs two Ubuntu packages (the `.deb` pulls them in; the offline bundle needs them once):
+`sudo apt install python3-gi gir1.2-webkit2-4.1` (on 22.04: `gir1.2-webkit2-4.0`).
+
+Start with `artex-console`: the console opens in its own window, with no web server and no network port.
+`artex-console --serve` runs the browser version at http://127.0.0.1:8787 instead (a second screen, headless use).
+`artex-console --check` opens the page in a hidden window and reports whether everything loads (exit code 0 / 1).
+If the window stays blank (some GPU drivers), start with `--safe-graphics`. The first start creates the data folder
 (`~/.local/share/artex`, or `ARTEX_HOME`) with sample areas and missions, and asks you to create the first operator
 (the admin). `artex-console --demo` runs everything against simulated aircraft.
 
